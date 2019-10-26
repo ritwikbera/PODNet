@@ -38,9 +38,9 @@ def gumbel_softmax(logits, temperature, hard=False):
     y_hard = (y_hard - y).detach() + y
     return y_hard.view(-1, latent_dim * categorical_dim)
 
-class VAE_gumbel(nn.Module):
+class PODNet(nn.Module):
     def __init__(self, temp):
-        super(VAE_gumbel, self).__init__()
+        super(PODNet, self).__init__()
 
         self.fc1 = nn.Linear(784, 512)
         self.fc2 = nn.Linear(512, 256)
@@ -69,7 +69,7 @@ class VAE_gumbel(nn.Module):
         z = gumbel_softmax(q_y, temp, hard)
         return self.decode(z), F.softmax(q_y, dim=-1).reshape(*q.size())
 
-model = VAE_gumbel(temp)
+model = PODNet(temp)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 
@@ -88,7 +88,7 @@ def train(epoch):
     train_loss = 0
     for batch_idx, (data, _) in enumerate(train_loader):
         optimizer.zero_grad()
-        recon_batch, qy = model(data, temp, args.hard)
+        recon_batch, qy = model(data, temp, hard)
         loss = loss_function(recon_batch, data, qy)
         loss.backward()
         train_loss += loss.item() * len(data)
