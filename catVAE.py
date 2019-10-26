@@ -13,18 +13,12 @@ temp = 5.0
 temp_min = 0.1
 ANNEAL_RATE = 0.003 
 learning_rate = 0.0003
+mlp_hidden = 64
 
 epochs = 10
 seed = 1
 batch_size = 1
 hard = False
-
-
-mlp_in = state_dim + categorical_dim
-mlp_hidden = mlp_in//2+1
-
-mlp = torch.nn.Sequential(torch.nn.Linear(D_in, H),
-        torch.nn.ReLU(), torch.nn.Linear(H, D_out),)
 
 torch.manual_seed(seed)
 
@@ -55,23 +49,38 @@ class PODNet(nn.Module):
     def __init__(self, temp):
         super(PODNet, self).__init__()
 
-        self.fc1 = nn.Linear(mlp_in, mlp_hidden)
-        self.fc2 = nn.Linear(mlp_hidden, latent_dim * categorical_dim)
+        #option inference layers
+        self.fc1 = nn.Linear(state_dim + categorical_dim, mlp_hidden)
+        self.fc2 = nn.Linear(mlp_hidden, mlp_hidden)        
+        self.fc3 = nn.Linear(mlp_hidden, latent_dim * categorical_dim)
 
-        self.fc4 = nn.Linear(latent_dim * categorical_dim, 256)
-        self.fc5 = nn.Linear(256, 512)
-        self.fc6 = nn.Linear(512, 784)
+        #policy network layers
+        self.fc4 = nn.Linear(state_dim + categorical_dim, mlp_hidden)
+        self.fc5 = nn.Linear(mlp_hidden, mlp_hidden)
+        self.fc6 = nn.Linear(mlp_hidden, action_dim)
+
+        #option dynamics layers
+        self.fc7 = nn.Linear(state_dim + categorical_dim, mlp_hidden)
+        self.fc8 = nn.Linear(mlp_hidden, mlp_hidden)
+        self.fc9 = nn.Linear(mlp_hidden, action_dim)
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
 
     def encode(self, x):
         h1 = self.relu(self.fc1(x))
-        return self.relu(self.fc2(h1))
+        h2 = self.relu(self.fc2(h1))
+        return self.relu(self.fc3(h2))
         
     def decode_next_state(self, z):
+        h1 = self.relu(self.fc4(x))
+        h2 = self.relu(self.fc5(h1))
+        return self.relu(self.fc6(h2))
 
     def decode_action(self, z):
+        h1 = self.relu(self.fc7(x))
+        h2 = self.relu(self.fc8(h1))
+        return self.relu(self.fc9(h2))
         
 
     def forward(self, x, temp, hard):
@@ -86,12 +95,12 @@ optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Reconstruction + KL divergence losses summed over all elements and batch
 def loss_function(recon_x, x, qy):
-    BCE = F.binary_cross_entropy(recon_x, x.view(-1, 784), size_average=False) / x.shape[0]
+    MSE = F.binary_cross_entropy(recon_x, x.view(-1, 784), size_average=False) / x.shape[0]
 
     log_ratio = torch.log(qy * categorical_dim + 1e-20)
     KLD = torch.sum(qy * log_ratio, dim=-1).mean()
 
-    return BCE + KLD
+    return MSE + KLD
 
 
 def train(epoch):
