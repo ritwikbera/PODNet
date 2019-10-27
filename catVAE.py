@@ -5,8 +5,8 @@ from torch.nn import functional as F
 
 state_dim = 3
 action_dim = 3
-latent_dim = 1
-categorical_dim = 2 
+latent_dim = 2 #has a similar effect to multi-head attention
+categorical_dim = 2 #number of options to be discovered 
 
 #from Directed-InfoGAIL
 temp = 5.0
@@ -16,9 +16,9 @@ learning_rate = 0.0003
 mlp_hidden = 64
 
 epochs = 10
-seed = 1
+seed = 1   #required for random gumbel sampling
 batch_size = 1
-hard = False
+hard = False  
 
 torch.manual_seed(seed)
 
@@ -50,19 +50,19 @@ class PODNet(nn.Module):
         super(PODNet, self).__init__()
 
         #option inference layers
-        self.fc1 = nn.Linear(state_dim + categorical_dim, mlp_hidden)
+        self.fc1 = nn.Linear(state_dim + latent_dim*categorical_dim, mlp_hidden)
         self.fc2 = nn.Linear(mlp_hidden, mlp_hidden)        
         self.fc3 = nn.Linear(mlp_hidden, latent_dim * categorical_dim)
 
         #policy network layers
-        self.fc4 = nn.Linear(state_dim + categorical_dim, mlp_hidden)
+        self.fc4 = nn.Linear(state_dim + latent_dim*categorical_dim, mlp_hidden)
         self.fc5 = nn.Linear(mlp_hidden, mlp_hidden)
         self.fc6 = nn.Linear(mlp_hidden, action_dim)
 
         #option dynamics layers
-        self.fc7 = nn.Linear(state_dim + categorical_dim, mlp_hidden)
+        self.fc7 = nn.Linear(state_dim + latent_dim*categorical_dim, mlp_hidden)
         self.fc8 = nn.Linear(mlp_hidden, mlp_hidden)
-        self.fc9 = nn.Linear(mlp_hidden, action_dim)
+        self.fc9 = nn.Linear(mlp_hidden, state_dim)
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
@@ -72,29 +72,31 @@ class PODNet(nn.Module):
         h2 = self.relu(self.fc2(h1))
         return self.relu(self.fc3(h2))
         
-    def decode_next_state(self, z):
-        h1 = self.relu(self.fc4(x))
+    def decode_next_state(self, s_t, c_t):
+        z = torch.cat((s_t, c_t), 1)
+        h1 = self.relu(self.fc4(z))
         h2 = self.relu(self.fc5(h1))
         return self.relu(self.fc6(h2))
 
-    def decode_action(self, z):
-        h1 = self.relu(self.fc7(x))
+    def decode_action(self, s_t, c_t):
+        z = torch.cat((s_t, c_t), 1)
+        h1 = self.relu(self.fc7(z))
         h2 = self.relu(self.fc8(h1))
         return self.relu(self.fc9(h2))
-        
 
-    def forward(self, x, temp, hard):
-        q = self.encode(x.view(-1, 784))
+    def forward(self, s_t, c_prev, temp, hard):
+        x = torch.cat((s_t, c_prev), 1)
+        q = self.encode(x.view(-1, state_dim + latent_dim*categorical_dim))
         q_y = q.view(q.size(0), latent_dim, categorical_dim)
-        z = gumbel_softmax(q_y, temp, hard)
-        return self.decode(z), F.softmax(q_y, dim=-1).reshape(*q.size())
+        c_t = gumbel_softmax(q_y, temp, hard)
+        return self.decode_action(s_t, c_t), self.decode_next_state(s_t, c_t), c_t
 
 model = PODNet(temp)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 
 # Reconstruction + KL divergence losses summed over all elements and batch
-def loss_function(recon_x, x, qy):
+def loss_function(next_state_pred, true_next_state, action_pred, true_action, qy):
     MSE = F.binary_cross_entropy(recon_x, x.view(-1, 784), size_average=False) / x.shape[0]
 
     log_ratio = torch.log(qy * categorical_dim + 1e-20)
@@ -106,12 +108,12 @@ def loss_function(recon_x, x, qy):
 def train(epoch):
     model.train()
     train_loss = 0
-    for state_data in traj_data:
+    for i, (state, action) in enumerate(traj_data):
         optimizer.zero_grad()
-        recon_batch, qy = model(state_data, temp, hard)
+        action_pred, next_state_pred, c_t = model(state, c_prev, temp, hard)
         loss = loss_function(recon_batch, state_data, qy)
         loss.backward()
-        train_loss += loss.item() * len(data)
+        train_loss += loss.item()
         optimizer.step()
         
     temp = np.maximum(temp * np.exp(-ANNEAL_RATE*epoch), temp_min)
