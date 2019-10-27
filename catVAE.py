@@ -22,6 +22,9 @@ hard = False
 
 torch.manual_seed(seed)
 
+traj_length = 64
+traj_data = torch.randn(traj_length, state_dim + action_dim)
+
 def sample_gumbel(shape, eps=1e-20):
     U = torch.rand(shape)
     return -torch.log(-torch.log(U + eps) + eps)
@@ -94,27 +97,35 @@ class PODNet(nn.Module):
 model = PODNet(temp)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
+def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_t):
+    Lambda_1 = 1  #loss-function weights
+    Lambda_2 = 1
+    beta = 1
 
-# Reconstruction + KL divergence losses summed over all elements and batch
-def loss_function(next_state_pred, true_next_state, action_pred, true_action, qy):
-    MSE = F.binary_cross_entropy(recon_x, x.view(-1, 784), size_average=False) / x.shape[0]
+    loss_fn = torch.nn.MSELoss(reduction='sum')
+    MSE = Lambda_1 * loss_fn(next_state_pred, true_next_state) + Lambda_2 * loss_fn(action_pred, true_action)
 
+    q_y = c_t
     log_ratio = torch.log(qy * categorical_dim + 1e-20)
     KLD = torch.sum(qy * log_ratio, dim=-1).mean()
 
-    return MSE + KLD
+    return MSE + beta*KLD
 
 
 def train(epoch):
     model.train()
     train_loss = 0
-    c_t_stored = torch.eye(latent_dim,option_dim).view(1,latent_dim*option_dim)
-    for i, (state, action) in enumerate(traj_data):
+    #c_t_initial = torch.eye(latent_dim,option_dim)
+    c_t_initial =  torch.Tensor([[1,0,0],[1,0,0]])
+    c_t_stored = c_t_initial.view(1,latent_dim*option_dim)
+
+    for i, data in enumerate(traj_data):
+        state, action = data[:state_dim], data[state_dim:]
         optimizer.zero_grad()
         c_prev = c_t_stored[-1]
         action_pred, next_state_pred, c_t = model(state, c_prev, temp, hard)
         c_t_stored = torch.cat((c_t_stored, c_t),0)
-        loss = loss_function(next_state_pred, state, action_pred, action, qy)
+        loss = loss_function(next_state_pred, state, action_pred, action, c_t)
         loss.backward()
         train_loss += loss.item()
         optimizer.step()
