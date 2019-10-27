@@ -108,10 +108,13 @@ def loss_function(next_state_pred, true_next_state, action_pred, true_action, qy
 def train(epoch):
     model.train()
     train_loss = 0
+    c_t_stored = torch.eye(latent_dim,option_dim).view(1,latent_dim*option_dim)
     for i, (state, action) in enumerate(traj_data):
         optimizer.zero_grad()
+        c_prev = c_t_stored[-1]
         action_pred, next_state_pred, c_t = model(state, c_prev, temp, hard)
-        loss = loss_function(recon_batch, state_data, qy)
+        c_t_stored = torch.cat((c_t_stored, c_t),0)
+        loss = loss_function(next_state_pred, state, action_pred, action, qy)
         loss.backward()
         train_loss += loss.item()
         optimizer.step()
