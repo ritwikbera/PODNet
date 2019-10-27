@@ -22,7 +22,8 @@ hard = False
 
 torch.manual_seed(seed)
 
-traj_length = 64
+#randomly generated trajectory data
+traj_length = 100
 traj_data = torch.randn(traj_length, state_dim + action_dim)
 
 def sample_gumbel(shape, eps=1e-20):
