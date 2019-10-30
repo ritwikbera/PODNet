@@ -24,3 +24,14 @@ Activate the new environment and install dependencies:
 # Instructions
 - Run CatVAE.py
 - Once dataset is downloaded, set download = False in the DataLoaders.
+
+## Collect human trajectories
+
+Run ```python collect_trajs.py``` and close environment window when finished collecting data. 
+Default actions are:
+- Left arrow: turns left  
+- Right arrow: turns right  
+- Up arrow: moves forward  
+
+Data as saved as csv file in the data folder. Each row corresponds to a data sample and columns represent episode number, 
+time step number of the current episode, action taken, and the rest are the observations stored as a flat array.
