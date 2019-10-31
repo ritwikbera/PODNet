@@ -1,14 +1,34 @@
 #!/usr/bin/env python3
 
 import sys
-import numpy
+import numpy as np
 import gym
 import time
 import datetime as dt
 from matplotlib import pyplot as plt
-
 import gym_minigrid
-from gym_minigrid.wrappers import FlatObsWrapper, ImgObsWrapper, FullyObsWrapper
+
+from gym import spaces
+
+class ReducedObsWrapper(gym.core.ObservationWrapper):
+    """
+    Fully observable gridworld using a compact grid encoding that returns as
+    observation only agent (x,y) position and orientation.
+    """
+
+    def __init__(self, env):
+        super().__init__(env)
+
+        self.observation_space.spaces["image"] = spaces.Box(
+            low=0,
+            high=255,
+            shape=(self.env.width, self.env.height, 3),  # number of cells
+            dtype='uint8'
+        )
+
+    def observation(self, obs):
+        env = self.unwrapped
+        return np.array([env.agent_pos[0],env.agent_pos[1],env.agent_dir])
 
 def main():
     # Start CSV log file
@@ -17,15 +37,16 @@ def main():
     log_file = open('data/{}_log.csv'.format(time_now), 'w')
 
     # Load the gym environment
-    # Added wrapper to receive observations as image
-    env = FullyObsWrapper(gym.make("MiniGrid-FourRooms-v0"))
+    # Add wrapper to modify observation
+    env = ReducedObsWrapper(gym.make("MiniGrid-Empty-Random-6x6-v0"))
     env.episode_count = 0
 
     def resetEnv():
         # Reset environment
         obs = env.reset()
         if hasattr(env, 'mission'):
-            print('Mission: %s' % env.mission)
+            print('[*] EPISODE {} | Mission: {}'.format(
+                env.episode_count,env.mission))
 
         # Log initial observation
         action = 0
@@ -36,7 +57,6 @@ def main():
         return obs
 
     obs = resetEnv()
-    print('initial obs: ', obs.flatten())
 
     # Create a window to render into
     renderer = env.render('human')
@@ -44,7 +64,7 @@ def main():
     def keyDownCb(keyName):
         if keyName == 'BACKSPACE':
             obs = resetEnv()
-            print('initial obs: ', obs.flatten())
+            print('initial obs: ', obs)
             return
 
         if keyName == 'ESCAPE':
@@ -90,10 +110,8 @@ def main():
             str(obs.flatten().tolist())[1:-1]))
 
 
-        print('step=%s, reward=%.2f' % (env.step_count, reward))
-
         if done:
-            print('done!')
+            print('Done after {} steps!'.format(env.step_count))
             env.episode_count += 1
             resetEnv()
 
