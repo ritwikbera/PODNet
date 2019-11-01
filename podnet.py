@@ -3,8 +3,8 @@ import torch
 from torch import nn, optim
 from torch.nn import functional as F
 
-state_dim = 3
-action_dim = 3
+state_dim = 2
+action_dim = 2
 latent_dim = 2 #has a similar effect to multi-head attention
 categorical_dim = 3 #number of options to be discovered 
 
@@ -15,9 +15,9 @@ ANNEAL_RATE = 0.003
 learning_rate = 0.0003
 mlp_hidden = 64
 
-epochs = 50
+epochs = 25
 seed = 1   #required for random gumbel sampling
-hard = False  
+hard = True  
 
 torch.manual_seed(seed)
 
@@ -26,11 +26,33 @@ traj_length = 100
 traj_num = 1 #similar to minibatch size (how many traj to be simultaneously processed)
 traj_data = torch.randn(traj_length, traj_num, state_dim + action_dim)
 
-def gen_traj_data(traj_length):
-    # #drawing a circle
-    # r = 10
-    # theta = 0
-    pass
+def gen_circle_traj(r_init, fin):
+    state = []
+    r = r_init
+
+    for theta in np.arange(0, fin, 1):
+        x = r*np.cos(theta*np.pi/180)
+        y = r*np.sin(theta*np.pi/180)
+        state.append([x, y])
+    state = np.array(state)
+    
+    state = state.tolist()
+    for theta in np.arange(fin, fin/2, -1):
+        x = r*np.cos(theta*np.pi/180)
+        y = r*np.sin(theta*np.pi/180)
+        state.append([x, y])
+       # r *= 0.99
+    state = np.array(state)
+
+    action = []
+    for i in range(1, len(state)):
+        action.append(state[i]-state[i-1])
+    action.append([0, 0])
+
+    return torch.Tensor(np.expand_dims(np.hstack((state, action)), axis=1))
+
+traj_data = gen_circle_traj(2,180)
+traj_length = len(traj_data)
 
 def sample_gumbel(shape, eps=1e-20):
     U = torch.rand(shape)
@@ -106,8 +128,8 @@ optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_t):
     Lambda_1 = 1  #loss-function weights
-    Lambda_2 = 1
-    beta = 1
+    Lambda_2 = 0.5
+    beta = 0.01
 
     loss_fn = torch.nn.MSELoss(reduction='sum')
     MSE = Lambda_1 * loss_fn(next_state_pred, true_next_state) + Lambda_2 * loss_fn(action_pred, true_action)
@@ -122,10 +144,11 @@ def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_
 def train(epoch):
     model.train()
     train_loss = 0
-    global temp, epochs 
+    global temp, epochs, traj_length 
     #c_t_initial = torch.eye(latent_dim,option_dim)
-    c_t_initial =  torch.Tensor([[1,0,0],[1,0,0]])
+    c_t_initial = torch.Tensor([[1,0,0],[1,0,0]])
     c_t_stored = c_t_initial.view(-1, 1, latent_dim*categorical_dim)
+    c_t_stored = c_t_stored.repeat(traj_length+1, 1, 1)
 
     i=0
     for data in traj_data:
@@ -136,14 +159,18 @@ def train(epoch):
         # print(state)
         # print(' action:')
         # print(action)
+
         optimizer.zero_grad()
-        c_prev = c_t_stored[-1]
+        c_prev = c_t_stored[i-1]
         action_pred, next_state_pred, c_t = model(state, c_prev, temp, hard)
-        c_t_stored = torch.cat((c_t_stored, c_t.unsqueeze(0)),0)
+
+        #c_t_stored = torch.cat((c_t_stored, c_t.unsqueeze(0)),0)
+        c_t_stored[i] = c_t
         loss = loss_function(next_state_pred, state, action_pred, action, c_t)
         loss.backward(retain_graph=True)
         train_loss += loss.item()
         optimizer.step()
+
         
     temp = np.maximum(temp * np.exp(-ANNEAL_RATE*epoch), temp_min)
     print('====> Epoch: {} Average loss: {:.4f}'.format(
