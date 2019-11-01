@@ -17,7 +17,7 @@ mlp_hidden = 64
 
 epochs = 25
 seed = 1   #required for random gumbel sampling
-hard = True  
+hard = False  
 
 torch.manual_seed(seed)
 
@@ -126,19 +126,26 @@ class PODNet(nn.Module):
 model = PODNet(temp)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_t):
+def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_t, print_loss=False):
     Lambda_1 = 1  #loss-function weights
     Lambda_2 = 0.5
     beta = 0.01
 
     loss_fn = torch.nn.MSELoss(reduction='sum')
-    MSE = Lambda_1 * loss_fn(next_state_pred, true_next_state) + Lambda_2 * loss_fn(action_pred, true_action)
+    L_BC = Lambda_2 * loss_fn(action_pred, true_action)
+    L_ODC = Lambda_1 * loss_fn(next_state_pred, true_next_state)
+    MSE = L_ODC + L_BC
 
     qy = c_t
     log_ratio = torch.log(qy * categorical_dim + 1e-20)
     KLD = torch.sum(qy * log_ratio, dim=-1).mean()
 
-    return MSE + beta*KLD
+    #if print_loss:
+    #    print('L_ODC: {} L_BC: {} Reg: {}'.format(L_ODC, L_BC, beta*KLD))
+    
+    return L_BC, L_ODC, beta*KLD
+    
+    #return MSE + beta*KLD
 
 
 def train(epoch):
@@ -151,6 +158,9 @@ def train(epoch):
     c_t_stored = c_t_stored.repeat(traj_length+1, 1, 1)
 
     i=0
+
+    L_BC_epoch, L_ODC_epoch, Reg_epoch = 0, 0, 0
+
     for data in traj_data:
         state, action = data[:,:state_dim], data[:,state_dim:]
         i += 1
@@ -166,7 +176,14 @@ def train(epoch):
 
         #c_t_stored = torch.cat((c_t_stored, c_t.unsqueeze(0)),0)
         c_t_stored[i] = c_t
-        loss = loss_function(next_state_pred, state, action_pred, action, c_t)
+        #loss = loss_function(next_state_pred, state, action_pred, action, c_t)
+        L_BC, L_ODC, Reg = loss_function(next_state_pred, state, action_pred, action, c_t)
+        
+        L_BC_epoch += L_BC
+        L_ODC_epoch += L_ODC
+        Reg_epoch += Reg
+
+        loss = L_BC + L_ODC + Reg
         loss.backward(retain_graph=True)
         train_loss += loss.item()
         optimizer.step()
@@ -175,6 +192,8 @@ def train(epoch):
     temp = np.maximum(temp * np.exp(-ANNEAL_RATE*epoch), temp_min)
     print('====> Epoch: {} Average loss: {:.4f}'.format(
         epoch, train_loss / len(traj_data)))
+
+    print('L_ODC: {} L_BC: {} Reg: {}'.format(L_ODC_epoch/i, L_BC_epoch/i, Reg_epoch/i))
 
     if epoch == epochs:
         print(c_t_stored)
