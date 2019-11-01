@@ -16,7 +16,7 @@ ANNEAL_RATE = 0.003
 learning_rate = 1e-3
 mlp_hidden = 64
 
-epochs = 50
+epochs = 25
 seed = 1   #required for random gumbel sampling
 hard = False  
 
@@ -223,6 +223,12 @@ def train(epoch):
     # plt.plot(epoch, Reg_epoch/i, 'bo')
 
     plt.plot(epoch, loss.item(), 'bo')
+
+    print('L_ODC: {} L_BC: {} Reg: {}'.format(L_ODC_epoch/i, L_BC_epoch/i, Reg_epoch/i))
+    
+    plt.plot(epoch, L_ODC_epoch/i, 'r.')
+    plt.plot(epoch, L_BC_epoch/i, 'g.')
+    plt.plot(epoch, Reg_epoch/i, 'b.')
 
     if epoch == epochs:
         print(c_t_stored)
