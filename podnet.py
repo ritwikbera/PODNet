@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torch import nn, optim
 from torch.nn import functional as F
+import matplotlib.pyplot as plt 
 
 state_dim = 2
 action_dim = 2
@@ -128,7 +129,7 @@ optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_t, print_loss=False):
     Lambda_1 = 1  #loss-function weights
-    Lambda_2 = 0.5
+    Lambda_2 = 1
     beta = 0.01
 
     loss_fn = torch.nn.MSELoss(reduction='sum')
@@ -179,9 +180,9 @@ def train(epoch):
         #loss = loss_function(next_state_pred, state, action_pred, action, c_t)
         L_BC, L_ODC, Reg = loss_function(next_state_pred, state, action_pred, action, c_t)
         
-        L_BC_epoch += L_BC
-        L_ODC_epoch += L_ODC
-        Reg_epoch += Reg
+        L_BC_epoch += L_BC.item()
+        L_ODC_epoch += L_ODC.item()
+        Reg_epoch += Reg.item()
 
         loss = L_BC + L_ODC + Reg
         loss.backward(retain_graph=True)
@@ -194,6 +195,10 @@ def train(epoch):
         epoch, train_loss / len(traj_data)))
 
     print('L_ODC: {} L_BC: {} Reg: {}'.format(L_ODC_epoch/i, L_BC_epoch/i, Reg_epoch/i))
+    
+    plt.plot(epoch, L_ODC_epoch/i, 'r.')
+    plt.plot(epoch, L_BC_epoch/i, 'g.')
+    plt.plot(epoch, Reg_epoch/i, 'b.')
 
     if epoch == epochs:
         print(c_t_stored)
@@ -201,6 +206,9 @@ def train(epoch):
 def run():
     for epoch in range(1, epochs + 1):
         train(epoch)
+
+    plt.savefig('train.png')
+    plt.show()
 
 if __name__ == '__main__':
     run()
