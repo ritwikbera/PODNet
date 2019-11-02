@@ -3,29 +3,38 @@ import torch
 from torch import nn, optim
 from torch.nn import functional as F
 import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set(style='whitegrid')
 
 state_dim = 2
 action_dim = 2
 latent_dim = 2 #has a similar effect to multi-head attention
-categorical_dim = 3 #number of options to be discovered 
+categorical_dim = 2 #number of options to be discovered 
 
 #from Directed-InfoGAIL
 temp = 5.0
 temp_min = 0.1
 ANNEAL_RATE = 0.003 
-learning_rate = 1e-3
-mlp_hidden = 64
+learning_rate = 1e-4
+mlp_hidden = 32
 
-epochs = 25
+epochs = 20
 seed = 1   #required for random gumbel sampling
 hard = False  
 
 torch.manual_seed(seed)
 
-#randomly generated trajectory data
-traj_length = 100
-traj_num = 1 #similar to minibatch size (how many traj to be simultaneously processed)
-traj_data = torch.randn(traj_length, traj_num, state_dim + action_dim)
+def normalize(data):
+    '''Substracts mean and divide by standard deviation and returns statistics.'''
+    mean = np.mean(data, axis=0)
+    std = np.std(data, axis=0)
+    norm_data = (data-mean)/std
+    return norm_data, mean, std
+
+def denormalize(norm_data, mean, std):
+    ''' Denormalize data based on given mean and standard deviation.'''
+    data = norm_data*std + mean
+    return data
 
 def gen_circle_traj(r_init, fin, plot_traj=False):
     state = []
@@ -51,6 +60,10 @@ def gen_circle_traj(r_init, fin, plot_traj=False):
     action.append([0, 0])
     action = np.array(action)
 
+    # normalize generated data
+    state, state_mean, state_std = normalize(state)
+    action, action_mean, action_std = normalize(action)
+
     # plot generated trajectories
     if plot_traj:
         plt.figure()
@@ -67,8 +80,10 @@ def gen_circle_traj(r_init, fin, plot_traj=False):
 
     return torch.Tensor(np.expand_dims(np.hstack((state, action)), axis=1))
 
+# generate normalized trajectory data
 traj_data = gen_circle_traj(10,180,plot_traj=False)
 traj_length = len(traj_data)
+
 
 def sample_gumbel(shape, eps=1e-20):
     U = torch.rand(shape)
@@ -146,18 +161,17 @@ class PODNet(nn.Module):
 # create PODNet
 model = PODNet(temp)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+loss_fn = torch.nn.MSELoss()
 
 def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_t, print_loss=False):
     #loss-function weights
-    Lambda_1 = 0  
+    Lambda_1 = 1  
     Lambda_2 = 1
     
-    beta = 0.0
+    beta = 0.01
 
-    loss_fn = torch.nn.MSELoss(reduction='sum')
     L_BC = Lambda_2 * loss_fn(action_pred, true_action)
     L_ODC = Lambda_1 * loss_fn(next_state_pred, true_next_state)
-    MSE = L_ODC + L_BC
 
     qy = c_t
     log_ratio = torch.log(qy * categorical_dim + 1e-20)
@@ -167,36 +181,41 @@ def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_
     #    print('L_ODC: {} L_BC: {} Reg: {}'.format(L_ODC, L_BC, beta*KLD))
     
     return L_BC, L_ODC, beta*KLD
-    
-    #return MSE + beta*KLD
 
 
 def train(epoch):
     model.train()
     train_loss = 0
-    global temp, epochs, traj_length 
+    global temp, epochs, traj_length, next_state_pred_plot, action_pred_plot, c_t_plot
     #c_t_initial = torch.eye(latent_dim,option_dim)
-    c_t_initial = torch.Tensor([[1,0,0],[1,0,0]])
+    c_t_initial = torch.Tensor([[1,0],[1,0]])
     c_t_stored = c_t_initial.view(-1, 1, latent_dim*categorical_dim)
     c_t_stored = c_t_stored.repeat(traj_length+1, 1, 1)
 
     i=0
 
     L_BC_epoch, L_ODC_epoch, Reg_epoch = 0, 0, 0
+    action_pred_plot = np.zeros((traj_length, action_dim))
+    next_state_pred_plot = np.zeros((traj_length, state_dim))
+    c_t_plot = np.zeros((traj_length, latent_dim*categorical_dim))
 
     for data in traj_data:
         state, action = data[:,:state_dim], data[:,state_dim:]
         i += 1
         # print(i)
-        # print('state: ')
-        # print(state)
-        # print(' action:')
-        # print(action)
+        # print('state: ', state)
+        # print(' action: '), action
 
         optimizer.zero_grad()
         c_prev = c_t_stored[i-1]
 
+        # predict next actions, states, and options
         action_pred, next_state_pred, c_t = model(state,c_prev,temp,hard)
+
+        # store predictions for plotting after training
+        action_pred_plot[i-1] = action_pred.detach().numpy()
+        next_state_pred_plot[i-1] = next_state_pred.detach().numpy()
+        c_t_plot[i-1] = c_t.detach().numpy()
 
         #c_t_stored = torch.cat((c_t_stored, c_t.unsqueeze(0)),0)
         c_t_stored[i] = c_t
@@ -213,33 +232,60 @@ def train(epoch):
         optimizer.step()
 
     temp = np.maximum(temp * np.exp(-ANNEAL_RATE*epoch), temp_min)
-    print('====> Epoch: {} Average loss: {:.4f} || Raw loss value: {}'.format(
-        epoch, train_loss / len(traj_data), loss.item()))
-
+    print('====> Epoch: {} Average loss: {:.4f}'.format(epoch, train_loss/i))
     print('L_ODC: {} L_BC: {} Reg: {}'.format(L_ODC_epoch/i, L_BC_epoch/i, Reg_epoch/i))
-    
-    # plt.plot(epoch, L_ODC_epoch/i, 'ro')
-    # plt.plot(epoch, L_BC_epoch/i, 'go')
-    # plt.plot(epoch, Reg_epoch/i, 'bo')
 
-    plt.plot(epoch, loss.item(), 'bo')
-
-    print('L_ODC: {} L_BC: {} Reg: {}'.format(L_ODC_epoch/i, L_BC_epoch/i, Reg_epoch/i))
-    
-    plt.plot(epoch, L_ODC_epoch/i, 'r.')
-    plt.plot(epoch, L_BC_epoch/i, 'g.')
-    plt.plot(epoch, Reg_epoch/i, 'b.')
-
-    if epoch == epochs:
-        print(c_t_stored)
+    return train_loss/i, L_BC_epoch/i, L_ODC_epoch/i, Reg_epoch/i
 
 def run():
+    # create array to store loss values for plotting
+    # format: epoch | train_loss | L_BC_epoch | L_ODC_epoch | Reg_epoch
+    loss_plot = np.zeros((epochs,5))
+
+    # training loop
+    for epoch in range(1, epochs + 1):
+        # train
+        train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch = train(epoch)
+
+        # store loss values
+        loss_plot[epoch-1] = epoch, train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch
+
+    # plot predicted values for the last epoch of training
+    plt.figure()
+    plt.title('Evaluate Option-conditioned Policy')
+    plt.plot(traj_data.numpy()[:,:,2], 'b-', label='a0')
+    plt.plot(traj_data.numpy()[:,:,3], 'r-',  label='a1')
+    plt.plot(action_pred_plot[:,0], 'b--', label='a0_pred')
+    plt.plot(action_pred_plot[:,1], 'r--', label='a1_pred')
+    plt.legend()
+    plt.savefig('eval_policy.png')
+
+    plt.figure()
+    plt.title('Evaluate Option-conditioned Dynamics')
+    plt.plot(traj_data.numpy()[:,:,0], 'b-', label='s0')
+    plt.plot(traj_data.numpy()[:,:,1], 'r-',  label='s1')
+    plt.plot(next_state_pred_plot[:,0], 'b--', label='s0_pred')
+    plt.plot(next_state_pred_plot[:,1], 'r--', label='s1_pred')
+    plt.legend()
+    plt.savefig('eval_dynamics.png')
+
+    plt.figure()
+    plt.title('Evaluate Option Inference')
+    plt.plot(np.argmax(c_t_plot[:,:categorical_dim], axis=1), 'b-', label='opt0')
+    plt.plot(np.argmax(c_t_plot[:,categorical_dim:], axis=1), 'r-', label='opt1')
+    plt.legend()
+    plt.savefig('eval_options.png')
+
+    # plot losses
     plt.figure()
     plt.title('Training Loss')
-    for epoch in range(1, epochs + 1):
-        train(epoch)
+    plt.plot(loss_plot[:,0], loss_plot[:,1], label='train_loss')
+    plt.plot(loss_plot[:,0], loss_plot[:,2], label='L_BC_epoch')
+    plt.plot(loss_plot[:,0], loss_plot[:,3], label='L_ODC_epoch')
+    plt.plot(loss_plot[:,0], loss_plot[:,4], label='Reg_epoch')
+    plt.legend()
+    plt.savefig('training_loss.png')
 
-    plt.savefig('train.png')
     plt.show()
 
 if __name__ == '__main__':
