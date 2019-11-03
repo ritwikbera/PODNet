@@ -8,7 +8,7 @@ sns.set(style='whitegrid')
 
 state_dim = 2
 action_dim = 2
-latent_dim = 2 #has a similar effect to multi-head attention
+latent_dim = 1 #has a similar effect to multi-head attention
 categorical_dim = 2 #number of options to be discovered 
 
 #from Directed-InfoGAIL
@@ -20,7 +20,7 @@ mlp_hidden = 32
 
 epochs = 20
 seed = 1   #required for random gumbel sampling
-hard = False  
+hard = True 
 
 torch.manual_seed(seed)
 
@@ -168,7 +168,7 @@ def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_
     Lambda_1 = 1  
     Lambda_2 = 1
     
-    beta = 0.01
+    beta = 0.1
 
     L_BC = Lambda_2 * loss_fn(action_pred, true_action)
     L_ODC = Lambda_1 * loss_fn(next_state_pred, true_next_state)
@@ -187,14 +187,14 @@ def train(epoch):
     model.train()
     train_loss = 0
     global temp, epochs, traj_length, next_state_pred_plot, action_pred_plot, c_t_plot
-    #c_t_initial = torch.eye(latent_dim,option_dim)
-    c_t_initial = torch.Tensor([[1,0],[1,0]])
+    global hard
+    c_t_initial = torch.Tensor([[1,0]])
     c_t_stored = c_t_initial.view(-1, 1, latent_dim*categorical_dim)
     c_t_stored = c_t_stored.repeat(traj_length+1, 1, 1)
 
     i=0
 
-    L_BC_epoch, L_ODC_epoch, Reg_epoch = 0, 0, 0
+    L_BC_epoch, L_ODC_epoch, Reg_epoch, L_TSR_epoch = 0, 0, 0, 0
     action_pred_plot = np.zeros((traj_length, action_dim))
     next_state_pred_plot = np.zeros((traj_length, state_dim))
     c_t_plot = np.zeros((traj_length, latent_dim*categorical_dim))
@@ -217,16 +217,18 @@ def train(epoch):
         next_state_pred_plot[i-1] = next_state_pred.detach().numpy()
         c_t_plot[i-1] = c_t.detach().numpy()
 
-        #c_t_stored = torch.cat((c_t_stored, c_t.unsqueeze(0)),0)
         c_t_stored[i] = c_t
         #loss = loss_function(next_state_pred, state, action_pred, action, c_t)
         L_BC, L_ODC, Reg = loss_function(next_state_pred,state,action_pred,action,c_t)
-        
+        L_TSR = 0
+        #L_TSR = 1-torch.dot(c_t_stored[i].squeeze(),c_t_stored[i-1].squeeze())
+
         L_BC_epoch += L_BC.item()
         L_ODC_epoch += L_ODC.item()
         Reg_epoch += Reg.item()
+        #L_TSR_epoch += L_TSR.item()
 
-        loss = L_BC + L_ODC + Reg
+        loss = L_BC + L_ODC + Reg + L_TSR
         loss.backward(retain_graph=True)
         train_loss += loss.item()
         optimizer.step()
@@ -234,6 +236,7 @@ def train(epoch):
     temp = np.maximum(temp * np.exp(-ANNEAL_RATE*epoch), temp_min)
     print('====> Epoch: {} Average loss: {:.4f}'.format(epoch, train_loss/i))
     print('L_ODC: {} L_BC: {} Reg: {}'.format(L_ODC_epoch/i, L_BC_epoch/i, Reg_epoch/i))
+    print('L_TSR: {}'.format(L_TSR_epoch/i))
 
     return train_loss/i, L_BC_epoch/i, L_ODC_epoch/i, Reg_epoch/i
 
@@ -272,7 +275,7 @@ def run():
     plt.figure()
     plt.title('Evaluate Option Inference')
     plt.plot(np.argmax(c_t_plot[:,:categorical_dim], axis=1), 'b-', label='opt0')
-    plt.plot(np.argmax(c_t_plot[:,categorical_dim:], axis=1), 'r-', label='opt1')
+    #plt.plot(np.argmax(c_t_plot[:,categorical_dim:], axis=1), 'r-', label='opt1')
     plt.legend()
     plt.savefig('eval_options.png')
 
