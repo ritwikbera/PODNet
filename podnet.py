@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set(style='whitegrid')
 
-state_dim = 2
+# state_dim = 2 # (x_t, y_t) of circle
+state_dim = 4 # (x_t, y_t, x_prev, y_prev) of circle
 action_dim = 2
 latent_dim = 1 #has a similar effect to multi-head attention
 categorical_dim = 2 #number of options to be discovered 
@@ -54,21 +55,28 @@ def gen_circle_traj(r_init, fin, plot_traj=False):
        # r *= 0.99
     state = np.array(state)
 
+    # concatenates next states to current ones so the array of states becomes
+    # (x_t, y_t, x_prev, y_prev) of circle
+    next_states = state[1:,:]
+    prev_states = state[:-1,:]
+    state = np.hstack((next_states, prev_states))
+
     action = []
     for i in range(1, len(state)):
-        action.append(state[i]-state[i-1])
+        action.append(state[i,:2]-state[i-1,:2])
     action.append([0, 0])
     action = np.array(action)
 
-    # normalize generated data
-    state, state_mean, state_std = normalize(state)
-    action, action_mean, action_std = normalize(action)
+    # check if have the same number of samples for states and actions
+    assert state.shape[0] == action.shape[0]
 
     # plot generated trajectories
     if plot_traj:
         plt.figure()
         plt.plot(state[:,0], label='s0')
         plt.plot(state[:,1], label='s1')
+        plt.plot(state[:,2], label='s2')
+        plt.plot(state[:,3], label='s3')
         plt.legend()
 
         plt.figure()
@@ -77,6 +85,10 @@ def gen_circle_traj(r_init, fin, plot_traj=False):
         plt.legend()
 
         plt.show()
+    
+    # normalize generated data
+    state, state_mean, state_std = normalize(state)
+    action, action_mean, action_std = normalize(action)
 
     return torch.Tensor(np.expand_dims(np.hstack((state, action)), axis=1))
 
@@ -118,14 +130,17 @@ class PODNet(nn.Module):
         self.fc3 = nn.Linear(mlp_hidden, latent_dim * categorical_dim)
 
         #policy network layers
-        self.fc4 = nn.Linear(state_dim + latent_dim*categorical_dim, mlp_hidden)
+        # the *2 terms accounts for c_prev
+        self.fc4 = nn.Linear(state_dim + latent_dim*categorical_dim*2, mlp_hidden)
         self.fc5 = nn.Linear(mlp_hidden, mlp_hidden)
         self.fc6 = nn.Linear(mlp_hidden, action_dim)
 
         #option dynamics layers
-        self.fc7 = nn.Linear(state_dim + latent_dim*categorical_dim, mlp_hidden)
+        # the *2 terms accounts for c_prev
+        # the /2 terms accounts for only predicting the next state (not previous)
+        self.fc7 = nn.Linear(state_dim + latent_dim*categorical_dim*2, mlp_hidden)
         self.fc8 = nn.Linear(mlp_hidden, mlp_hidden)
-        self.fc9 = nn.Linear(mlp_hidden, state_dim)
+        self.fc9 = nn.Linear(mlp_hidden, int(state_dim/2))
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
@@ -135,14 +150,14 @@ class PODNet(nn.Module):
         h2 = self.relu(self.fc2(h1))
         return self.fc3(h2)
         
-    def decode_next_state(self, s_t, c_t):
-        z = torch.cat((s_t, c_t), -1)
+    def decode_next_state(self, s_t, c_t, c_prev):
+        z = torch.cat((s_t, c_t, c_prev), -1)
         h1 = self.relu(self.fc4(z))
         h2 = self.relu(self.fc5(h1))
         return self.fc6(h2)
 
-    def decode_action(self, s_t, c_t):
-        z = torch.cat((s_t, c_t), -1)
+    def decode_action(self, s_t, c_t, c_prev):
+        z = torch.cat((s_t, c_t, c_prev), -1)
         h1 = self.relu(self.fc7(z))
         h2 = self.relu(self.fc8(h1))
         return self.fc9(h2)
@@ -153,8 +168,8 @@ class PODNet(nn.Module):
         q_y = q.view(q.size(0), latent_dim, categorical_dim)
         c_t = gumbel_softmax(q_y, temp, hard)
 
-        action_pred = self.decode_action(s_t, c_t)
-        next_state_pred = self.decode_next_state(s_t, c_t)
+        action_pred = self.decode_action(s_t, c_t, c_prev)
+        next_state_pred = self.decode_next_state(s_t, c_t, c_prev)
 
         return action_pred, next_state_pred, c_t
 
@@ -192,11 +207,12 @@ def train(epoch):
     c_t_stored = c_t_initial.view(-1, 1, latent_dim*categorical_dim)
     c_t_stored = c_t_stored.repeat(traj_length+1, 1, 1)
 
+    # initialize variables and create arrays to store plotting data
     i=0
-
     L_BC_epoch, L_ODC_epoch, Reg_epoch, L_TSR_epoch = 0, 0, 0, 0
     action_pred_plot = np.zeros((traj_length, action_dim))
-    next_state_pred_plot = np.zeros((traj_length, state_dim))
+    # the /2 terms accounts for only predicting the next state (not previous)
+    next_state_pred_plot = np.zeros((traj_length, int(state_dim/2)))
     c_t_plot = np.zeros((traj_length, latent_dim*categorical_dim))
 
     for data in traj_data:
@@ -204,7 +220,7 @@ def train(epoch):
         i += 1
         # print(i)
         # print('state: ', state)
-        # print(' action: '), action
+        # print(' action: ', action)
 
         optimizer.zero_grad()
         c_prev = c_t_stored[i-1]
@@ -219,7 +235,8 @@ def train(epoch):
 
         c_t_stored[i] = c_t
         #loss = loss_function(next_state_pred, state, action_pred, action, c_t)
-        L_BC, L_ODC, Reg = loss_function(next_state_pred,state,action_pred,action,c_t)
+        true_next_state = state[0][int(state_dim/2):] # previously: true_next_state = state
+        L_BC, L_ODC, Reg = loss_function(next_state_pred,true_next_state,action_pred,action,c_t)
         L_TSR = 0
         #L_TSR = 1-torch.dot(c_t_stored[i].squeeze(),c_t_stored[i-1].squeeze())
 
@@ -256,8 +273,8 @@ def run():
     # plot predicted values for the last epoch of training
     plt.figure()
     plt.title('Evaluate Option-conditioned Policy')
-    plt.plot(traj_data.numpy()[:,:,2], 'b-', label='a0')
-    plt.plot(traj_data.numpy()[:,:,3], 'r-',  label='a1')
+    plt.plot(traj_data.numpy()[:,:,4], 'b-', label='a0')
+    plt.plot(traj_data.numpy()[:,:,5], 'r-',  label='a1')
     plt.plot(action_pred_plot[:,0], 'b--', label='a0_pred')
     plt.plot(action_pred_plot[:,1], 'r--', label='a1_pred')
     plt.legend()
@@ -274,8 +291,7 @@ def run():
 
     plt.figure()
     plt.title('Evaluate Option Inference')
-    plt.plot(np.argmax(c_t_plot[:,:categorical_dim], axis=1), 'b-', label='opt0')
-    #plt.plot(np.argmax(c_t_plot[:,categorical_dim:], axis=1), 'r-', label='opt1')
+    plt.plot(np.argmax(c_t_plot[:,:categorical_dim], axis=1), 'b-')
     plt.legend()
     plt.savefig('eval_options.png')
 
