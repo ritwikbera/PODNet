@@ -21,7 +21,7 @@ mlp_hidden = 32
 
 epochs = 20
 seed = 1   #required for random gumbel sampling
-hard = True 
+hard = False 
 
 torch.manual_seed(seed)
 
@@ -210,12 +210,14 @@ def train(epoch):
     # initialize variables and create arrays to store plotting data
     i=0
     L_BC_epoch, L_ODC_epoch, Reg_epoch, L_TSR_epoch = 0, 0, 0, 0
-    action_pred_plot = np.zeros((traj_length, action_dim))
+    action_pred_plot = np.zeros((traj_length-1, action_dim))
     # the /2 terms accounts for only predicting the next state (not previous)
-    next_state_pred_plot = np.zeros((traj_length, int(state_dim/2)))
-    c_t_plot = np.zeros((traj_length, latent_dim*categorical_dim))
+    next_state_pred_plot = np.zeros((traj_length-1, int(state_dim/2)))
+    c_t_plot = np.zeros((traj_length-1, latent_dim*categorical_dim))
 
-    for data in traj_data:
+    # loops until traj_length-1 because we need to use the next state as true_next_state
+    for k in range(traj_length-1):
+        data = traj_data[k]
         state, action = data[:,:state_dim], data[:,state_dim:]
         i += 1
         # print(i)
@@ -234,8 +236,9 @@ def train(epoch):
         c_t_plot[i-1] = c_t.detach().numpy()
 
         c_t_stored[i] = c_t
+        true_next_state = traj_data[k+1][:,:int(state_dim/2)]
+
         #loss = loss_function(next_state_pred, state, action_pred, action, c_t)
-        true_next_state = state[0][int(state_dim/2):] # previously: true_next_state = state
         L_BC, L_ODC, Reg = loss_function(next_state_pred,true_next_state,action_pred,action,c_t)
         L_TSR = 0
         #L_TSR = 1-torch.dot(c_t_stored[i].squeeze(),c_t_stored[i-1].squeeze())
@@ -292,7 +295,6 @@ def run():
     plt.figure()
     plt.title('Evaluate Option Inference')
     plt.plot(np.argmax(c_t_plot[:,:categorical_dim], axis=1), 'b-')
-    plt.legend()
     plt.savefig('eval_options.png')
 
     # plot losses
