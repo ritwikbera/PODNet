@@ -35,3 +35,17 @@ Default actions are:
 
 Data as saved as csv file in the data folder. Each row corresponds to a data sample and columns represent episode number, 
 time step number of the current episode, action taken, and the rest are the observations stored as a flat array.
+
+# Citation
+
+If you use this repository, please cite our work:  
+```
+@misc{bera2019podnet,
+    title={PODNet: A Neural Network for Discovery of Plannable Options},
+    author={Ritwik Bera and Vinicius G. Goecks and John Valasek and Nicholas R. Waytowich},
+    year={2019},
+    eprint={1911.00171},
+    archivePrefix={arXiv},
+    primaryClass={cs.LG}
+}
+```
