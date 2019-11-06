@@ -15,12 +15,13 @@ categorical_dim = 2 #number of options to be discovered
 #from Directed-InfoGAIL
 temp = 5.0
 temp_min = 0.1
-ANNEAL_RATE = 0.003 
+ANNEAL_RATE = 0.003
 learning_rate = 1e-4
 mlp_hidden = 32
 
-epochs = 20
+epochs = 50
 seed = 1   #required for random gumbel sampling
+np.random.seed(seed)
 hard = False 
 
 torch.manual_seed(seed)
@@ -37,22 +38,23 @@ def denormalize(norm_data, mean, std):
     data = norm_data*std + mean
     return data
 
-def gen_circle_traj(r_init, fin, plot_traj=False):
+def gen_circle_traj(r_init, n_segments, plot_traj=False):
     state = []
     r = r_init
+    last_fin = 0
+    direction = -1
 
-    for theta in np.arange(0, fin, 1):
-        x = r*np.cos(theta*np.pi/180)
-        y = r*np.sin(theta*np.pi/180)
-        state.append([x, y])
-    state = np.array(state)
-    
-    state = state.tolist()
-    for theta in np.arange(fin, fin/2, -1):
-        x = r*np.cos(theta*np.pi/180)
-        y = r*np.sin(theta*np.pi/180)
-        state.append([x, y])
-       # r *= 0.99
+    for j in range(n_segments):
+        # generate size of segment
+        fin = np.random.randint(low=30,high=150)
+        # randomize direction
+        direction *= -1
+        # generate states
+        for theta in np.arange(last_fin, fin, direction):
+            x = r*np.cos(theta*np.pi/180)
+            y = r*np.sin(theta*np.pi/180)
+            state.append([x, y])
+        last_fin += fin
     state = np.array(state)
 
     # concatenates next states to current ones so the array of states becomes
@@ -62,12 +64,15 @@ def gen_circle_traj(r_init, fin, plot_traj=False):
     state = np.hstack((next_states, prev_states))
 
     action = []
+    action.append([0,0])
     for i in range(1, len(state)):
         action.append(state[i,:2]-state[i-1,:2])
-    action.append([0, 0])
     action = np.array(action)
+    # smooth out abrupt changes in states
+    action = np.clip(action,-.0175,.0175)
 
     # check if have the same number of samples for states and actions
+    print('{} samples.'.format(state.shape[0]))
     assert state.shape[0] == action.shape[0]
 
     # plot generated trajectories
@@ -93,7 +98,7 @@ def gen_circle_traj(r_init, fin, plot_traj=False):
     return torch.Tensor(np.expand_dims(np.hstack((state, action)), axis=1))
 
 # generate normalized trajectory data
-traj_data = gen_circle_traj(10,180,plot_traj=False)
+traj_data = gen_circle_traj(r_init=1, n_segments=4, plot_traj=True)
 traj_length = len(traj_data)
 
 
@@ -201,8 +206,14 @@ def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_
 def train(epoch):
     model.train()
     train_loss = 0
-    global temp, epochs, traj_length, next_state_pred_plot, action_pred_plot, c_t_plot
+
+    global temp, epochs, traj_length
     global hard
+    global temp_plot, next_state_pred_plot, action_pred_plot, c_t_plot
+
+    # store current temperature value
+    current_temp = temp
+
     c_t_initial = torch.Tensor([[1,0]])
     c_t_stored = c_t_initial.view(-1, 1, latent_dim*categorical_dim)
     c_t_stored = c_t_stored.repeat(traj_length+1, 1, 1)
@@ -227,8 +238,14 @@ def train(epoch):
         optimizer.zero_grad()
         c_prev = c_t_stored[i-1]
 
+        # # TEMP: fixing value of c_t to evaluate other aspects of the model
+        # c_prev = torch.Tensor([[1,0]])
+
         # predict next actions, states, and options
-        action_pred, next_state_pred, c_t = model(state,c_prev,temp,hard)
+        action_pred, next_state_pred, c_t = model(state,c_prev,current_temp,hard)
+
+        # # TEMP: fixing value of c_t to evaluate other aspects of the model
+        # c_t = torch.Tensor([[1,0]])
 
         # store predictions for plotting after training
         action_pred_plot[i-1] = action_pred.detach().numpy()
@@ -253,25 +270,29 @@ def train(epoch):
         train_loss += loss.item()
         optimizer.step()
 
+    # update temperature value
     temp = np.maximum(temp * np.exp(-ANNEAL_RATE*epoch), temp_min)
+
+    # print info
     print('====> Epoch: {} Average loss: {:.4f}'.format(epoch, train_loss/i))
     print('L_ODC: {} L_BC: {} Reg: {}'.format(L_ODC_epoch/i, L_BC_epoch/i, Reg_epoch/i))
     print('L_TSR: {}'.format(L_TSR_epoch/i))
+    print('current_temp: {}'.format(current_temp))
 
-    return train_loss/i, L_BC_epoch/i, L_ODC_epoch/i, Reg_epoch/i
+    return train_loss/i, L_BC_epoch/i, L_ODC_epoch/i, Reg_epoch/i, current_temp
 
 def run():
     # create array to store loss values for plotting
-    # format: epoch | train_loss | L_BC_epoch | L_ODC_epoch | Reg_epoch
-    loss_plot = np.zeros((epochs,5))
+    # format: epoch | train_loss | L_BC_epoch | L_ODC_epoch | Reg_epoch | temp
+    loss_plot = np.zeros((epochs,6))
 
     # training loop
     for epoch in range(1, epochs + 1):
         # train
-        train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch = train(epoch)
+        train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch, current_temp = train(epoch)
 
         # store loss values
-        loss_plot[epoch-1] = epoch, train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch
+        loss_plot[epoch-1] = epoch, train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch, current_temp
 
     # plot predicted values for the last epoch of training
     plt.figure()
@@ -306,6 +327,12 @@ def run():
     plt.plot(loss_plot[:,0], loss_plot[:,4], label='Reg_epoch')
     plt.legend()
     plt.savefig('training_loss.png')
+
+    # plot temp
+    plt.figure()
+    plt.title('Temperature')
+    plt.plot(loss_plot[:,0], loss_plot[:,5])
+    plt.savefig('temp_loss.png')
 
     plt.show()
 
