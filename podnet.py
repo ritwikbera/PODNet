@@ -72,12 +72,13 @@ def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False):
     action = np.clip(action,-.0175,.0175)
 
     # check if have the same number of samples for states and actions
-    print('{} samples.'.format(state.shape[0]))
+    print('Generated trajectory with {} samples.'.format(state.shape[0]))
     assert state.shape[0] == action.shape[0]
 
     # plot generated trajectories
     if plot_traj:
         plt.figure()
+        plt.title('Generated States')
         plt.plot(state[:,0], label='s0')
         plt.plot(state[:,1], label='s1')
         plt.plot(state[:,2], label='s2')
@@ -85,6 +86,7 @@ def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False):
         plt.legend()
 
         plt.figure()
+        plt.title('Generated Actions')
         plt.plot(action[:,0], 'o', label='a0')
         plt.plot(action[:,1], 'o', label='a1')
         plt.legend()
@@ -97,12 +99,14 @@ def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False):
 
     # save generated trajectory in a csv file
     if save_csv:
-        np.savetxt('circle_traj.csv', np.hstack((state, action)), delimiter=',')
+        np.savetxt(
+            'circle_traj.csv', np.hstack((state, action)), delimiter=',')
 
     return torch.Tensor(np.expand_dims(np.hstack((state, action)), axis=1))
 
 # generate normalized trajectory data
-traj_data = gen_circle_traj(r_init=1, n_segments=6, plot_traj=True, save_csv=True)
+traj_data = gen_circle_traj(
+    r_init=1, n_segments=4, plot_traj=True, save_csv=False)
 traj_length = len(traj_data)
 
 
@@ -192,7 +196,7 @@ def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_
     Lambda_1 = 1  
     Lambda_2 = 1
     
-    beta = 0.2
+    beta = 0.01
 
     L_BC = Lambda_2 * loss_fn(action_pred, true_action)
     L_ODC = Lambda_1 * loss_fn(next_state_pred, true_next_state)
@@ -242,13 +246,13 @@ def train(epoch):
         optimizer.zero_grad()
         c_prev = c_t_stored[i-1]
 
-        # # TEMP: fixing value of c_t to evaluate other aspects of the model
+        # # TEMP: fixed value of c_t to evaluate other aspects of the model
         # c_prev = torch.Tensor([[1,0]])
 
         # predict next actions, states, and options
         action_pred, next_state_pred, c_t = model(state,c_prev,current_temp,hard)
 
-        # # TEMP: fixing value of c_t to evaluate other aspects of the model
+        # # TEMP: fixed value of c_t to evaluate other aspects of the model
         # c_t = torch.Tensor([[1,0]])
 
         # store predictions for plotting after training
@@ -262,12 +266,12 @@ def train(epoch):
         #loss = loss_function(next_state_pred, state, action_pred, action, c_t)
         L_BC, L_ODC, Reg = loss_function(next_state_pred,true_next_state,action_pred,action,c_t)
         L_TSR = 0
-        #L_TSR = 1-torch.dot(c_t_stored[i].squeeze(),c_t_stored[i-1].squeeze())
+        L_TSR = 1-torch.dot(c_t_stored[i].squeeze(),c_t_stored[i-1].squeeze())
 
         L_BC_epoch += L_BC.item()
         L_ODC_epoch += L_ODC.item()
         Reg_epoch += Reg.item()
-        #L_TSR_epoch += L_TSR.item()
+        L_TSR_epoch += L_TSR.item()
 
         loss = L_BC + L_ODC + Reg + L_TSR
         loss.backward(retain_graph=True)
@@ -279,24 +283,23 @@ def train(epoch):
 
     # print info
     print('====> Epoch: {}/{} Average loss: {:.4f}'.format(epoch, epochs, train_loss/i))
-    print('L_ODC: {} L_BC: {} Reg: {}'.format(L_ODC_epoch/i, L_BC_epoch/i, Reg_epoch/i))
-    print('L_TSR: {}'.format(L_TSR_epoch/i))
-    print('current_temp: {}'.format(current_temp))
+    print('L_ODC: {:.4f} L_BC: {:.4f} Reg: {:.5f} L_TSR: {:.5f} temp: {:.2f}'.format(
+        L_ODC_epoch/i, L_BC_epoch/i, Reg_epoch/i, L_TSR_epoch/i, current_temp))
 
-    return train_loss/i, L_BC_epoch/i, L_ODC_epoch/i, Reg_epoch/i, current_temp
+    return train_loss/i, L_BC_epoch/i, L_ODC_epoch/i, Reg_epoch/i, current_temp, L_TSR_epoch/i
 
 def run():
     # create array to store loss values for plotting
-    # format: epoch | train_loss | L_BC_epoch | L_ODC_epoch | Reg_epoch | temp
-    loss_plot = np.zeros((epochs,6))
+    # format: epoch | train_loss | L_BC_epoch | L_ODC_epoch | Reg_epoch | temp | L_TSR_epoch
+    loss_plot = np.zeros((epochs,7))
 
     # training loop
     for epoch in range(1, epochs + 1):
         # train
-        train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch, current_temp = train(epoch)
+        train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch, current_temp, L_TSR_epoch = train(epoch)
 
         # store loss values
-        loss_plot[epoch-1] = epoch, train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch, current_temp
+        loss_plot[epoch-1] = epoch, train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch, current_temp, L_TSR_epoch
 
     # plot predicted values for the last epoch of training
     plt.figure()
@@ -319,7 +322,9 @@ def run():
 
     plt.figure()
     plt.title('Evaluate Option Inference')
-    plt.plot(np.argmax(c_t_plot[:,:categorical_dim], axis=1), 'b-')
+    plt.plot(np.argmax(c_t_plot[:,:categorical_dim], axis=1), 'b-', label='argmax')
+    plt.plot(c_t_plot[:,:categorical_dim], 'b--', label='true')
+    plt.legend()
     plt.savefig('eval_options.png')
 
     # plot losses
@@ -329,6 +334,7 @@ def run():
     plt.plot(loss_plot[:,0], loss_plot[:,2], label='L_BC_epoch')
     plt.plot(loss_plot[:,0], loss_plot[:,3], label='L_ODC_epoch')
     plt.plot(loss_plot[:,0], loss_plot[:,4], label='Reg_epoch')
+    plt.plot(loss_plot[:,0], loss_plot[:,6], label='L_TSR_epoch')
     plt.legend()
     plt.savefig('training_loss.png')
 
