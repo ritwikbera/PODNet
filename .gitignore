@@ -1,5 +1,6 @@
 # data folder
 data/*
 *.png
+*.csv
 
 playground.py

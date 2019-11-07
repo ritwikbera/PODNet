@@ -19,7 +19,7 @@ ANNEAL_RATE = 0.003
 learning_rate = 1e-4
 mlp_hidden = 32
 
-epochs = 50
+epochs = 30
 seed = 1   #required for random gumbel sampling
 np.random.seed(seed)
 hard = False 
@@ -38,7 +38,7 @@ def denormalize(norm_data, mean, std):
     data = norm_data*std + mean
     return data
 
-def gen_circle_traj(r_init, n_segments, plot_traj=False):
+def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False):
     state = []
     r = r_init
     last_fin = 0
@@ -95,10 +95,14 @@ def gen_circle_traj(r_init, n_segments, plot_traj=False):
     state, state_mean, state_std = normalize(state)
     action, action_mean, action_std = normalize(action)
 
+    # save generated trajectory in a csv file
+    if save_csv:
+        np.savetxt('circle_traj.csv', np.hstack((state, action)), delimiter=',')
+
     return torch.Tensor(np.expand_dims(np.hstack((state, action)), axis=1))
 
 # generate normalized trajectory data
-traj_data = gen_circle_traj(r_init=1, n_segments=4, plot_traj=True)
+traj_data = gen_circle_traj(r_init=1, n_segments=6, plot_traj=True, save_csv=True)
 traj_length = len(traj_data)
 
 
@@ -188,7 +192,7 @@ def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_
     Lambda_1 = 1  
     Lambda_2 = 1
     
-    beta = 0.1
+    beta = 0.2
 
     L_BC = Lambda_2 * loss_fn(action_pred, true_action)
     L_ODC = Lambda_1 * loss_fn(next_state_pred, true_next_state)
@@ -274,7 +278,7 @@ def train(epoch):
     temp = np.maximum(temp * np.exp(-ANNEAL_RATE*epoch), temp_min)
 
     # print info
-    print('====> Epoch: {} Average loss: {:.4f}'.format(epoch, train_loss/i))
+    print('====> Epoch: {}/{} Average loss: {:.4f}'.format(epoch, epochs, train_loss/i))
     print('L_ODC: {} L_BC: {} Reg: {}'.format(L_ODC_epoch/i, L_BC_epoch/i, Reg_epoch/i))
     print('L_TSR: {}'.format(L_TSR_epoch/i))
     print('current_temp: {}'.format(current_temp))
