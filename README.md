@@ -22,8 +22,7 @@ Activate the new environment and install dependencies:
 ```pip install -r requirements.txt```
 
 # Instructions
-- Run CatVAE.py
-- Once dataset is downloaded, set download = False in the DataLoaders.
+- Run ```python podnet.py```.
 
 ## Collect human trajectories
 
