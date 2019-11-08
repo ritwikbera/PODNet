@@ -19,8 +19,8 @@ ANNEAL_RATE = 0.003
 learning_rate = 1e-4
 mlp_hidden = 32
 
-epochs = 30
-seed = 1   #required for random gumbel sampling
+epochs = 100
+seed = 2   #required for random gumbel sampling
 np.random.seed(seed)
 hard = False 
 
@@ -40,17 +40,31 @@ def denormalize(norm_data, mean, std):
 
 def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False):
     state = []
+    true_segments = []
     r = r_init
     last_fin = 0
-    direction = -1
+    next_fin = 0
+    direction = 1
 
     for j in range(n_segments):
         # generate size of segment
         fin = np.random.randint(low=30,high=150)
+        next_fin += fin
+        true_segments.append(fin)
+        print('Segment #{}: {} degrees'.format(j, fin))
         # randomize direction
         direction *= -1
+
+        # prepare indexes to generate segments
+        if direction == 1:
+            start_idx = np.minimum(last_fin, next_fin)
+            end_idx = np.maximum(last_fin, next_fin)
+        elif direction == -1:
+            start_idx = np.maximum(last_fin, next_fin)
+            end_idx = np.minimum(last_fin, next_fin)
+
         # generate states
-        for theta in np.arange(last_fin, fin, direction):
+        for theta in np.arange(start_idx, end_idx, direction):
             x = r*np.cos(theta*np.pi/180)
             y = r*np.sin(theta*np.pi/180)
             state.append([x, y])
@@ -102,11 +116,11 @@ def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False):
         np.savetxt(
             'circle_traj.csv', np.hstack((state, action)), delimiter=',')
 
-    return torch.Tensor(np.expand_dims(np.hstack((state, action)), axis=1))
+    return torch.Tensor(np.expand_dims(np.hstack((state, action)), axis=1)), true_segments
 
 # generate normalized trajectory data
-traj_data = gen_circle_traj(
-    r_init=1, n_segments=4, plot_traj=True, save_csv=False)
+traj_data, true_segments = gen_circle_traj(
+    r_init=1, n_segments=2, plot_traj=True, save_csv=False)
 traj_length = len(traj_data)
 
 
@@ -157,22 +171,38 @@ class PODNet(nn.Module):
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
+        self.dropout = nn.Dropout(p=0.3)
+        self.use_dropout_encode = False
+        self.use_dropout_dynamics = False
+        self.use_dropout_policy = False
 
     def encode(self, x):
         h1 = self.relu(self.fc1(x))
+        if self.use_dropout_encode:
+            h1 = self.dropout(h1)
         h2 = self.relu(self.fc2(h1))
+        if self.use_dropout_encode:
+            h2 = self.dropout(h2)
         return self.fc3(h2)
         
     def decode_next_state(self, s_t, c_t, c_prev):
         z = torch.cat((s_t, c_t, c_prev), -1)
         h1 = self.relu(self.fc4(z))
+        if self.use_dropout_dynamics:
+            h1 = self.dropout(h1)
         h2 = self.relu(self.fc5(h1))
+        if self.use_dropout_dynamics:
+            h2 = self.dropout(h2)
         return self.fc6(h2)
 
     def decode_action(self, s_t, c_t, c_prev):
         z = torch.cat((s_t, c_t, c_prev), -1)
         h1 = self.relu(self.fc7(z))
+        if self.use_dropout_policy:
+            h1 = self.dropout(h1)
         h2 = self.relu(self.fc8(h1))
+        if self.use_dropout_policy:
+            h2 = self.dropout(h2)
         return self.fc9(h2)
 
     def forward(self, s_t, c_prev, temp, hard):
@@ -196,7 +226,7 @@ def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_
     Lambda_1 = 1  
     Lambda_2 = 1
     
-    beta = 0.01
+    beta = 0.001
 
     L_BC = Lambda_2 * loss_fn(action_pred, true_action)
     L_ODC = Lambda_1 * loss_fn(next_state_pred, true_next_state)
@@ -217,7 +247,6 @@ def train(epoch):
 
     global temp, epochs, traj_length
     global hard
-    global temp_plot, next_state_pred_plot, action_pred_plot, c_t_plot
 
     # store current temperature value
     current_temp = temp
@@ -229,49 +258,30 @@ def train(epoch):
     # initialize variables and create arrays to store plotting data
     i=0
     L_BC_epoch, L_ODC_epoch, Reg_epoch, L_TSR_epoch = 0, 0, 0, 0
-    action_pred_plot = np.zeros((traj_length-1, action_dim))
-    # the /2 terms accounts for only predicting the next state (not previous)
-    next_state_pred_plot = np.zeros((traj_length-1, int(state_dim/2)))
-    c_t_plot = np.zeros((traj_length-1, latent_dim*categorical_dim))
 
     # loops until traj_length-1 because we need to use the next state as true_next_state
     for k in range(traj_length-1):
         data = traj_data[k]
         state, action = data[:,:state_dim], data[:,state_dim:]
         i += 1
-        # print(i)
-        # print('state: ', state)
-        # print(' action: ', action)
 
         optimizer.zero_grad()
         c_prev = c_t_stored[i-1]
 
-        # # TEMP: fixed value of c_t to evaluate other aspects of the model
-        # c_prev = torch.Tensor([[1,0]])
-
         # predict next actions, states, and options
         action_pred, next_state_pred, c_t = model(state,c_prev,current_temp,hard)
-
-        # # TEMP: fixed value of c_t to evaluate other aspects of the model
-        # c_t = torch.Tensor([[1,0]])
-
-        # store predictions for plotting after training
-        action_pred_plot[i-1] = action_pred.detach().numpy()
-        next_state_pred_plot[i-1] = next_state_pred.detach().numpy()
-        c_t_plot[i-1] = c_t.detach().numpy()
-
         c_t_stored[i] = c_t
         true_next_state = traj_data[k+1][:,:int(state_dim/2)]
 
         #loss = loss_function(next_state_pred, state, action_pred, action, c_t)
         L_BC, L_ODC, Reg = loss_function(next_state_pred,true_next_state,action_pred,action,c_t)
         L_TSR = 0
-        L_TSR = 1-torch.dot(c_t_stored[i].squeeze(),c_t_stored[i-1].squeeze())
+        # L_TSR = 1-torch.dot(c_t_stored[i].squeeze(),c_t_stored[i-1].squeeze())
 
         L_BC_epoch += L_BC.item()
         L_ODC_epoch += L_ODC.item()
         Reg_epoch += Reg.item()
-        L_TSR_epoch += L_TSR.item()
+        L_TSR_epoch += 0#L_TSR.item()
 
         loss = L_BC + L_ODC + Reg + L_TSR
         loss.backward(retain_graph=True)
@@ -288,6 +298,49 @@ def train(epoch):
 
     return train_loss/i, L_BC_epoch/i, L_ODC_epoch/i, Reg_epoch/i, current_temp, L_TSR_epoch/i
 
+def eval():
+    model.eval()
+
+    global temp_min, hard
+    global temp_plot, next_state_pred_plot, action_pred_plot, c_t_plot
+    current_temp = temp_min
+
+    # # generate trajectory for evaluation
+    # traj_data, true_segments = gen_circle_traj(
+    #     r_init=1, n_segments=2, plot_traj=True, save_csv=False)
+    # traj_length = len(traj_data)
+
+    # option labels
+    c_t_initial = torch.Tensor([[1,0]])
+    c_t_stored = c_t_initial.view(-1, 1, latent_dim*categorical_dim)
+    c_t_stored = c_t_stored.repeat(traj_length+1, 1, 1)
+
+    # initialize variables and create arrays to store plotting data
+    i=0
+    action_pred_plot = np.zeros((traj_length-1, action_dim))
+    # the /2 terms accounts for only predicting the next state (not previous)
+    next_state_pred_plot = np.zeros((traj_length-1, int(state_dim/2)))
+    c_t_plot = np.zeros((traj_length-1, latent_dim*categorical_dim))
+
+    # loops until traj_length-1 because we need to use the next state as true_next_state
+    for k in range(traj_length-1):
+        data = traj_data[k]
+        state, action = data[:,:state_dim], data[:,state_dim:]
+
+        i += 1
+        c_prev = c_t_stored[i-1]
+
+        # predict next actions, states, and options
+        action_pred, next_state_pred, c_t = model(state,c_prev,current_temp,hard)
+
+        # store predictions for plotting after training
+        action_pred_plot[i-1] = action_pred.detach().numpy()
+        next_state_pred_plot[i-1] = next_state_pred.detach().numpy()
+        c_t_plot[i-1] = c_t.detach().numpy()
+        c_t_stored[i] = c_t
+
+    return traj_data, true_segments
+
 def run():
     # create array to store loss values for plotting
     # format: epoch | train_loss | L_BC_epoch | L_ODC_epoch | Reg_epoch | temp | L_TSR_epoch
@@ -301,7 +354,11 @@ def run():
         # store loss values
         loss_plot[epoch-1] = epoch, train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch, current_temp, L_TSR_epoch
 
+    # evaluate model
+    traj_data, true_segments = eval()
+
     # plot predicted values for the last epoch of training
+    # policy
     plt.figure()
     plt.title('Evaluate Option-conditioned Policy')
     plt.plot(traj_data.numpy()[:,:,4], 'b-', label='a0')
@@ -311,6 +368,7 @@ def run():
     plt.legend()
     plt.savefig('eval_policy.png')
 
+    # dynamics
     plt.figure()
     plt.title('Evaluate Option-conditioned Dynamics')
     plt.plot(traj_data.numpy()[:,:,0], 'b-', label='s0')
@@ -320,10 +378,22 @@ def run():
     plt.legend()
     plt.savefig('eval_dynamics.png')
 
+    # inference
+    # postprocess true labels
     plt.figure()
     plt.title('Evaluate Option Inference')
-    plt.plot(np.argmax(c_t_plot[:,:categorical_dim], axis=1), 'b-', label='argmax')
-    plt.plot(c_t_plot[:,:categorical_dim], 'b--', label='true')
+    last_step = 0
+    direction = -1
+    for m in range(len(true_segments)):
+        steps = np.arange(true_segments[m]) + last_step
+        if direction == 1:
+            vals = np.ones(true_segments[m])
+        elif direction == -1:
+            vals = np.zeros(true_segments[m])
+        plt.plot(steps,vals,'D',alpha=0.5,label='truth{}'.format(m))
+        last_step = steps[-1]+1
+        direction *= -1    
+    plt.plot(np.argmax(c_t_plot[:,:categorical_dim], axis=1), 'k.', label='pred')
     plt.legend()
     plt.savefig('eval_options.png')
 
