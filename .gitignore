@@ -1,6 +1,6 @@
 # data folder
 data/*
-robotarium/*
+robots/*
 *.png
 *.csv
 *.zip
