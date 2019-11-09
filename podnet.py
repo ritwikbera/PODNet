@@ -8,31 +8,66 @@ sns.set(style='whitegrid')
 
 from circleworld import normalize, denormalize, gen_circle_traj
 from gumbel import sample_gumbel, gumbel_softmax_sample, gumbel_softmax
+from utils import to_categorical
 
-# state_dim = 2 # (x_t, y_t) of circle
-state_dim = 4 # (x_t, y_t, x_prev, y_prev) of circle
-action_dim = 2
-latent_dim = 1 #has a similar effect to multi-head attention
-categorical_dim = 2 #number of options to be discovered 
+import pickle
 
-#from Directed-InfoGAIL
+# -----------------------------------------------
+# Random seeds
+seed = 2
+np.random.seed(seed)
+torch.manual_seed(seed)
+
+# -----------------------------------------------
+# Experiment hyperparameters
+PLOT_RESULTS = True
+epochs = 1
+hard = False 
+
+# from Directed-InfoGAIL
 temp = 5.0
 temp_min = 0.1
 ANNEAL_RATE = 0.003
 learning_rate = 1e-4
 mlp_hidden = 32
 
-epochs = 100
-seed = 2   #required for random gumbel sampling
-np.random.seed(seed)
-hard = False 
+# -----------------------------------------------
+# Environment
+# env_name = 'CircleWorld'
+env_name = 'PerimeterDef'
 
-torch.manual_seed(seed)
+if env_name == 'CircleWorld':
+    state_dim = 4 # (x_t, y_t, x_prev, y_prev) of circle
+    action_dim = 2
+    latent_dim = 1 # has a similar effect to multi-head attention
+    categorical_dim = 2 # number of options to be discovered
 
-# generate normalized trajectory data
-traj_data, true_segments = gen_circle_traj(
-    r_init=1, n_segments=2, plot_traj=True, save_csv=True)
-traj_length = len(traj_data)
+    # generate normalized trajectory data
+    traj_data, true_segments_int = gen_circle_traj(
+        r_init=1, n_segments=2, plot_traj=False, save_csv=False)
+    traj_length = len(traj_data)
+
+    # convert trajectory segments to pytorch format after one-hot encoding
+    true_segments = torch.from_numpy(to_categorical(true_segments_int))
+    c_t_stored = true_segments.view(traj_length,1,categorical_dim)
+
+elif env_name == 'PerimeterDef':
+    state_dim = 32 # includes previous states
+    action_dim = 16
+    latent_dim = 1 # has a similar effect to multi-head attention
+    categorical_dim = 4 # number of options to be discovered
+
+    # load dataset
+    dataset = np.genfromtxt('data/sample_robots.csv', delimiter=',')
+    traj_data, true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
+    traj_length = traj_data.shape[0]
+
+    # normalize states and actions
+    traj_data = torch.Tensor(np.expand_dims(traj_data, axis=1))
+
+    # convert trajectory segments to pytorch format after one-hot encoding
+    true_segments = torch.from_numpy(to_categorical(true_segments_int))
+    c_t_stored = true_segments.view(traj_length,1,categorical_dim)
 
 
 class PODNet(nn.Module):
@@ -122,9 +157,6 @@ def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_
     qy = c_t
     log_ratio = torch.log(qy * categorical_dim + 1e-20)
     KLD = torch.sum(qy * log_ratio, dim=-1).mean()
-
-    #if print_loss:
-    #    print('L_ODC: {} L_BC: {} Reg: {}'.format(L_ODC, L_BC, beta*KLD))
     
     return L_BC, L_ODC, beta*KLD
 
@@ -139,12 +171,8 @@ def train(epoch):
     # store current temperature value
     current_temp = temp
 
-    c_t_initial = torch.Tensor([[1,0]])
-    c_t_stored = c_t_initial.view(-1, 1, latent_dim*categorical_dim)
-    c_t_stored = c_t_stored.repeat(traj_length+1, 1, 1)
-
     # initialize variables and create arrays to store plotting data
-    i=0
+    i = 0
     L_BC_epoch, L_ODC_epoch, Reg_epoch, L_TSR_epoch = 0, 0, 0, 0
 
     # loops until traj_length-1 because we need to use the next state as true_next_state
@@ -193,16 +221,6 @@ def eval():
     global temp_plot, next_state_pred_plot, action_pred_plot, c_t_plot
     current_temp = temp_min
 
-    # # generate trajectory for evaluation
-    # traj_data, true_segments = gen_circle_traj(
-    #     r_init=1, n_segments=2, plot_traj=True, save_csv=False)
-    # traj_length = len(traj_data)
-
-    # option labels
-    c_t_initial = torch.Tensor([[1,0]])
-    c_t_stored = c_t_initial.view(-1, 1, latent_dim*categorical_dim)
-    c_t_stored = c_t_stored.repeat(traj_length+1, 1, 1)
-
     # initialize variables and create arrays to store plotting data
     i=0
     action_pred_plot = np.zeros((traj_length-1, action_dim))
@@ -247,52 +265,57 @@ def run():
 
     # plot predicted values for the last epoch of training
     # policy
-    plt.figure()
-    plt.title('Evaluate Option-conditioned Policy')
-    plt.plot(traj_data.numpy()[:,:,4], 'b-', label='a0')
-    plt.plot(traj_data.numpy()[:,:,5], 'r-',  label='a1')
-    plt.plot(action_pred_plot[:,0], 'b--', label='a0_pred')
-    plt.plot(action_pred_plot[:,1], 'r--', label='a1_pred')
-    plt.legend()
-    plt.savefig('eval_policy.png')
+    if PLOT_RESULTS:
+        plt.figure()
+        plt.title('Evaluate Option-conditioned Policy')
+        for i in range(action_dim):
+            p = plt.plot(traj_data.numpy()[:,:,state_dim+i], '-', label='a{}'.format(i))
+            plt.plot(action_pred_plot[:,i], '--', color=p[0].get_color(), label='a{}_pred'.format(i))
+        plt.legend()
+        plt.savefig('eval_policy.png')
 
-    # dynamics
-    plt.figure()
-    plt.title('Evaluate Option-conditioned Dynamics')
-    plt.plot(traj_data.numpy()[:,:,0], 'b-', label='s0')
-    plt.plot(traj_data.numpy()[:,:,1], 'r-',  label='s1')
-    plt.plot(next_state_pred_plot[:,0], 'b--', label='s0_pred')
-    plt.plot(next_state_pred_plot[:,1], 'r--', label='s1_pred')
-    plt.legend()
-    plt.savefig('eval_dynamics.png')
+        # dynamics
+        plt.figure()
+        plt.title('Evaluate Option-conditioned Dynamics')
+        for i in range(int(state_dim/2)):
+            p = plt.plot(traj_data.numpy()[:,:,i], '-', label='s{}'.format(i))
+            plt.plot(next_state_pred_plot[:,i], '--', color=p[0].get_color(), label='s{}_pred'.format(i))
+        plt.legend()
+        plt.savefig('eval_dynamics.png')
 
-    # inference
-    # postprocess true labels
-    plt.figure()
-    plt.title('Evaluate Option Inference')
-    plt.plot(true_segments,'D',alpha=0.5,label='truth')
-    plt.plot(np.argmax(c_t_plot[:,:categorical_dim], axis=1), 'k.', label='pred')
-    plt.legend()
-    plt.savefig('eval_options.png')
+        # inference
+        # postprocess true labels
+        plt.figure()
+        plt.title('Evaluate Option Inference')
+        plt.plot(true_segments_int,'D',alpha=0.5,label='truth')
+        plt.plot(np.argmax(c_t_plot[:,:categorical_dim], axis=1), 'k.', label='pred')
+        plt.legend()
+        plt.savefig('eval_options.png')
 
-    # plot losses
-    plt.figure()
-    plt.title('Training Loss')
-    plt.plot(loss_plot[:,0], loss_plot[:,1], label='train_loss')
-    plt.plot(loss_plot[:,0], loss_plot[:,2], label='L_BC_epoch')
-    plt.plot(loss_plot[:,0], loss_plot[:,3], label='L_ODC_epoch')
-    plt.plot(loss_plot[:,0], loss_plot[:,4], label='Reg_epoch')
-    plt.plot(loss_plot[:,0], loss_plot[:,6], label='L_TSR_epoch')
-    plt.legend()
-    plt.savefig('training_loss.png')
+        # plot losses
+        plt.figure(figsize=[12,8])
+        plt.suptitle('Training Loss')
+        plt.subplot(321)
+        plt.plot(loss_plot[:,0], loss_plot[:,1], label='train_loss')
+        plt.legend()
+        plt.subplot(322)
+        plt.plot(loss_plot[:,0], loss_plot[:,2], label='L_BC_epoch')
+        plt.legend()
+        plt.subplot(323)
+        plt.plot(loss_plot[:,0], loss_plot[:,3], label='L_ODC_epoch')
+        plt.legend()
+        plt.subplot(324)
+        plt.plot(loss_plot[:,0], loss_plot[:,4], label='Reg_epoch')
+        plt.legend()
+        plt.subplot(325)
+        plt.plot(loss_plot[:,0], loss_plot[:,6], label='L_TSR_epoch')
+        plt.legend()
+        plt.subplot(326)
+        plt.plot(loss_plot[:,0], loss_plot[:,5], label='temp')
+        plt.legend()
+        plt.savefig('training_loss.png')
 
-    # plot temp
-    plt.figure()
-    plt.title('Temperature')
-    plt.plot(loss_plot[:,0], loss_plot[:,5])
-    plt.savefig('temp_loss.png')
-
-    plt.show()
+        plt.show()
 
 if __name__ == '__main__':
     run()

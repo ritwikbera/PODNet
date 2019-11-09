@@ -5,5 +5,6 @@ robotarium/*
 *.csv
 *.zip
 *.mat
+*.pyc
 
 playground.py
