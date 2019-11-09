@@ -21,7 +21,7 @@ torch.manual_seed(seed)
 # -----------------------------------------------
 # Experiment hyperparameters
 PLOT_RESULTS = True
-epochs = 1
+epochs = 20
 hard = False 
 
 # from Directed-InfoGAIL
@@ -62,7 +62,8 @@ elif env_name == 'PerimeterDef':
     traj_data, true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
     traj_length = traj_data.shape[0]
 
-    # normalize states and actions
+    # normalize states and actions and convert to pytorch format
+    traj_data, traj_data_mean, traj_data_std = normalize(traj_data)
     traj_data = torch.Tensor(np.expand_dims(traj_data, axis=1))
 
     # convert trajectory segments to pytorch format after one-hot encoding
