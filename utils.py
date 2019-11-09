@@ -1,5 +1,17 @@
 import numpy as np
 
+def normalize(data):
+    '''Substracts mean and divide by standard deviation and returns statistics.'''
+    mean = np.mean(data, axis=0)
+    std = np.std(data, axis=0)
+    norm_data = (data-mean)/std
+    return norm_data, mean, std
+
+def denormalize(norm_data, mean, std):
+    ''' Denormalize data based on given mean and standard deviation.'''
+    data = norm_data*std + mean
+    return data
+
 # copied from Keras to avoid tensorflor installation
 # source: https://github.com/keras-team/keras/blob/master/keras/utils/np_utils.py#L9
 def to_categorical(y, num_classes=None, dtype='float32'):

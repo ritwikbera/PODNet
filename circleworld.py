@@ -6,37 +6,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set(style='whitegrid')
 
-# state_dim = 2 # (x_t, y_t) of circle
-state_dim = 4 # (x_t, y_t, x_prev, y_prev) of circle
-action_dim = 2
-latent_dim = 1 #has a similar effect to multi-head attention
-categorical_dim = 2 #number of options to be discovered 
+from utils import normalize, denormalize
 
-#from Directed-InfoGAIL
-temp = 5.0
-temp_min = 0.1
-ANNEAL_RATE = 0.003
-learning_rate = 1e-4
-mlp_hidden = 32
-
-epochs = 100
-seed = 2   #required for random gumbel sampling
-np.random.seed(seed)
-hard = False 
-
-torch.manual_seed(seed)
-
-def normalize(data):
-    '''Substracts mean and divide by standard deviation and returns statistics.'''
-    mean = np.mean(data, axis=0)
-    std = np.std(data, axis=0)
-    norm_data = (data-mean)/std
-    return norm_data, mean, std
-
-def denormalize(norm_data, mean, std):
-    ''' Denormalize data based on given mean and standard deviation.'''
-    data = norm_data*std + mean
-    return data
 
 def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False):
     state = []
@@ -110,15 +81,14 @@ def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False):
         plt.show()
     
     # normalize generated data
-    state, state_mean, state_std = normalize(state)
-    action, action_mean, action_std = normalize(action)
+    traj_data, traj_data_mean, traj_data_std = normalize(np.hstack((state, action)))
 
     # save generated trajectory in a csv file
     if save_csv:
         np.savetxt(
-            'data/circle_traj.csv', np.hstack((state, action, true_segments.reshape(-1,1))), delimiter=',')
+            'data/circle_traj.csv', np.hstack((traj_data, true_segments.reshape(-1,1))), delimiter=',')
 
-    return torch.Tensor(np.expand_dims(np.hstack((state, action)), axis=1)), true_segments
+    return torch.Tensor(np.expand_dims(traj_data, axis=1)), traj_data_mean, traj_data_std, true_segments
 
 if __name__ == "__main__":
     traj_data, true_segments = gen_circle_traj(

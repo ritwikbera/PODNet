@@ -6,5 +6,6 @@ robots/*
 *.zip
 *.mat
 *.pyc
+*.prof
 
 playground.py

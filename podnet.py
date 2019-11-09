@@ -1,3 +1,8 @@
+''' podnet.py
+profile: python -m cProfile -o podnet.prof podnet.py
+viz: snakeviz podnet.proof
+'''
+import time
 import numpy as np
 import torch
 from torch import nn, optim
@@ -6,11 +11,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set(style='whitegrid')
 
-from circleworld import normalize, denormalize, gen_circle_traj
+from circleworld import gen_circle_traj
 from gumbel import sample_gumbel, gumbel_softmax_sample, gumbel_softmax
-from utils import to_categorical
-
-import pickle
+from utils import to_categorical, normalize, denormalize
 
 # -----------------------------------------------
 # Random seeds
@@ -21,7 +24,7 @@ torch.manual_seed(seed)
 # -----------------------------------------------
 # Experiment hyperparameters
 PLOT_RESULTS = True
-epochs = 20
+epochs = 100
 hard = False 
 
 # from Directed-InfoGAIL
@@ -43,7 +46,7 @@ if env_name == 'CircleWorld':
     categorical_dim = 2 # number of options to be discovered
 
     # generate normalized trajectory data
-    traj_data, true_segments_int = gen_circle_traj(
+    traj_data, traj_data_mean, traj_data_std, true_segments_int = gen_circle_traj(
         r_init=1, n_segments=2, plot_traj=False, save_csv=False)
     traj_length = len(traj_data)
 
@@ -142,7 +145,7 @@ class PODNet(nn.Module):
 
 # create PODNet
 model = PODNet(temp)
-optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
 loss_fn = torch.nn.MSELoss()
 
 def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_t, print_loss=False):
@@ -163,9 +166,6 @@ def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_
 
 
 def train(epoch):
-    model.train()
-    train_loss = 0
-
     global temp, epochs, traj_length
     global hard
 
@@ -174,7 +174,7 @@ def train(epoch):
 
     # initialize variables and create arrays to store plotting data
     i = 0
-    L_BC_epoch, L_ODC_epoch, Reg_epoch, L_TSR_epoch = 0, 0, 0, 0
+    train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch, L_TSR_epoch = 0, 0, 0, 0, 0
 
     # loops until traj_length-1 because we need to use the next state as true_next_state
     for k in range(traj_length-1):
@@ -187,7 +187,18 @@ def train(epoch):
 
         # predict next actions, states, and options
         action_pred, next_state_pred, c_t = model(state,c_prev,current_temp,hard)
-        c_t_stored[i] = c_t
+        
+        # -----------------------------------------------------------------------
+        # *** IMPORTANT ***
+        # VGG (Nov/9/2019): This line was messing up the whole code!
+        # It stores a pytorch together with the complete loss graph. Since this
+        # is called at every data sample of every epoch, it was a massive sink
+        # of computational resources.
+        # Since all labels are loaded first, we dont need this line. If we really
+        # need, it should be c_t_stored[i] = c_t.detach() so it discards the graph.
+        # c_t_stored[i] = c_t
+        # c_t_stored[i] = c_t.detach()
+        
         true_next_state = traj_data[k+1][:,:int(state_dim/2)]
 
         #loss = loss_function(next_state_pred, state, action_pred, action, c_t)
@@ -195,6 +206,8 @@ def train(epoch):
         L_TSR = 0
         # L_TSR = 1-torch.dot(c_t_stored[i].squeeze(),c_t_stored[i-1].squeeze())
 
+        # --------------------------------------------
+        # Propagates gradients after every data sample
         L_BC_epoch += L_BC.item()
         L_ODC_epoch += L_ODC.item()
         Reg_epoch += Reg.item()
@@ -254,15 +267,30 @@ def run():
     loss_plot = np.zeros((epochs,7))
 
     # training loop
+    start_train = time.time()
+    model.train()
     for epoch in range(1, epochs + 1):
         # train
+        start_epoch = time.time()
         train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch, current_temp, L_TSR_epoch = train(epoch)
+        print('Epoch time: {:.2f} seconds'.format(time.time()-start_epoch))
 
         # store loss values
         loss_plot[epoch-1] = epoch, train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch, current_temp, L_TSR_epoch
+    print('[*] Total training time: {:.2f} minutes'.format((time.time()-start_train)/60))
 
     # evaluate model
     traj_data, true_segments = eval()
+
+    # denormalize data before plotting
+    traj_data = traj_data.numpy()
+    # # ground truth
+    # traj_data = denormalize(traj_data, traj_data_mean, traj_data_std)
+    # # predicted
+    # traj_data_plot = np.hstack((next_state_pred_plot, action_pred_plot))
+    # traj_data_plot_mean = np.hstack(( traj_data_mean[:int(state_dim/2)], traj_data_mean[state_dim:] ))
+    # traj_data_plot_std = np.hstack((traj_data_std[:int(state_dim/2)], traj_data_std[state_dim:]))
+    # traj_data_plot = denormalize(traj_data_plot, traj_data_plot_mean, traj_data_plot_std)
 
     # plot predicted values for the last epoch of training
     # policy
@@ -270,7 +298,7 @@ def run():
         plt.figure()
         plt.title('Evaluate Option-conditioned Policy')
         for i in range(action_dim):
-            p = plt.plot(traj_data.numpy()[:,:,state_dim+i], '-', label='a{}'.format(i))
+            p = plt.plot(traj_data[:,:,state_dim+i], '-', label='a{}'.format(i))
             plt.plot(action_pred_plot[:,i], '--', color=p[0].get_color(), label='a{}_pred'.format(i))
         plt.legend()
         plt.savefig('eval_policy.png')
@@ -279,7 +307,7 @@ def run():
         plt.figure()
         plt.title('Evaluate Option-conditioned Dynamics')
         for i in range(int(state_dim/2)):
-            p = plt.plot(traj_data.numpy()[:,:,i], '-', label='s{}'.format(i))
+            p = plt.plot(traj_data[:,:,i], '-', label='s{}'.format(i))
             plt.plot(next_state_pred_plot[:,i], '--', color=p[0].get_color(), label='s{}_pred'.format(i))
         plt.legend()
         plt.savefig('eval_dynamics.png')

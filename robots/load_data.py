@@ -186,8 +186,8 @@ if __name__ =='__main__':
     train_data = DataProcessor(file_dir = data_dir, files = datafiles, randomize = False)
 
     # visualize data
-    t_initial = 775
-    t_limit = 1530
+    t_initial = 0#775
+    t_limit = train_data.labels_gt.shape[0]#1530
     plt.figure()
     plt.title('Sample Options')
     plt.plot(train_data.labels_gt[t_initial:t_limit])
@@ -242,4 +242,4 @@ if __name__ =='__main__':
     plt.show()
 
     # save data sample
-    np.savetxt('sample_robots.csv', np.hstack((state,f_action,option)), delimiter=',')
+    np.savetxt('big_sample_robots.csv', np.hstack((state,f_action,option)), delimiter=',')
