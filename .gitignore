@@ -1,6 +1,9 @@
 # data folder
 data/*
+robotarium/*
 *.png
 *.csv
+*.zip
+*.mat
 
 playground.py
