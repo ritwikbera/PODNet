@@ -1,6 +1,6 @@
 ''' podnet.py
 profile: python -m cProfile -o podnet.prof podnet.py
-viz: snakeviz podnet.proof
+viz: snakeviz podnet.prof
 '''
 import time
 import numpy as np
@@ -27,23 +27,23 @@ PLOT_RESULTS = True
 epochs = 100
 hard = False 
 
-# from Directed-InfoGAIL
-temp = 5.0
-temp_min = 0.1
-ANNEAL_RATE = 0.003
-learning_rate = 1e-4
-mlp_hidden = 32
-
 # -----------------------------------------------
 # Environment
-# env_name = 'CircleWorld'
-env_name = 'PerimeterDef'
+env_name = 'CircleWorld'
+# env_name = 'PerimeterDef'
 
 if env_name == 'CircleWorld':
     state_dim = 4 # (x_t, y_t, x_prev, y_prev) of circle
     action_dim = 2
     latent_dim = 1 # has a similar effect to multi-head attention
     categorical_dim = 2 # number of options to be discovered
+
+    # from Directed-InfoGAIL
+    temp = 5.0
+    temp_min = 0.1
+    ANNEAL_RATE = 0.003
+    learning_rate = 1e-4
+    mlp_hidden = 32
 
     # generate normalized trajectory data
     traj_data, traj_data_mean, traj_data_std, true_segments_int = gen_circle_traj(
@@ -52,7 +52,7 @@ if env_name == 'CircleWorld':
 
     # convert trajectory segments to pytorch format after one-hot encoding
     true_segments = torch.from_numpy(to_categorical(true_segments_int))
-    c_t_stored = true_segments.view(traj_length,1,categorical_dim)
+    c_initial = torch.Tensor([[1,0]])
 
 elif env_name == 'PerimeterDef':
     state_dim = 32 # includes previous states
@@ -60,8 +60,15 @@ elif env_name == 'PerimeterDef':
     latent_dim = 1 # has a similar effect to multi-head attention
     categorical_dim = 4 # number of options to be discovered
 
+    # from Directed-InfoGAIL
+    temp = 5.0
+    temp_min = 0.1
+    ANNEAL_RATE = 0.003
+    learning_rate = 1e-4
+    mlp_hidden = 64
+
     # load dataset
-    dataset = np.genfromtxt('data/sample_robots.csv', delimiter=',')
+    dataset = np.genfromtxt('data/big_sample_robots.csv', delimiter=',')
     traj_data, true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
     traj_length = traj_data.shape[0]
 
@@ -71,7 +78,7 @@ elif env_name == 'PerimeterDef':
 
     # convert trajectory segments to pytorch format after one-hot encoding
     true_segments = torch.from_numpy(to_categorical(true_segments_int))
-    c_t_stored = true_segments.view(traj_length,1,categorical_dim)
+    c_initial = torch.Tensor([[1,0,0,0]])
 
 
 class PODNet(nn.Module):
@@ -166,13 +173,14 @@ def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_
 
 
 def train(epoch):
-    global temp, epochs, traj_length
+    global temp, epochs, traj_length, c_initial
     global hard
 
     # store current temperature value
     current_temp = temp
 
     # initialize variables and create arrays to store plotting data
+    c_prev = c_initial
     i = 0
     train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch, L_TSR_epoch = 0, 0, 0, 0, 0
 
@@ -183,28 +191,25 @@ def train(epoch):
         i += 1
 
         optimizer.zero_grad()
-        c_prev = c_t_stored[i-1]
 
         # predict next actions, states, and options
         action_pred, next_state_pred, c_t = model(state,c_prev,current_temp,hard)
-        
-        # -----------------------------------------------------------------------
-        # *** IMPORTANT ***
-        # VGG (Nov/9/2019): This line was messing up the whole code!
-        # It stores a pytorch together with the complete loss graph. Since this
-        # is called at every data sample of every epoch, it was a massive sink
-        # of computational resources.
-        # Since all labels are loaded first, we dont need this line. If we really
-        # need, it should be c_t_stored[i] = c_t.detach() so it discards the graph.
-        # c_t_stored[i] = c_t
-        # c_t_stored[i] = c_t.detach()
-        
         true_next_state = traj_data[k+1][:,:int(state_dim/2)]
 
         #loss = loss_function(next_state_pred, state, action_pred, action, c_t)
         L_BC, L_ODC, Reg = loss_function(next_state_pred,true_next_state,action_pred,action,c_t)
         L_TSR = 0
         # L_TSR = 1-torch.dot(c_t_stored[i].squeeze(),c_t_stored[i-1].squeeze())
+
+        # -----------------------------------------------------------------------
+        # *** IMPORTANT ***
+        # VGG (Nov/9/2019): This line slows down the code.
+        # It stores a pytorch together with the complete loss graph. Since this
+        # is called at every data sample of every epoch, it was a massive sink
+        # of computational resources.
+        # Modified code to only save current and previous c.
+        # c_t_stored[i] = c_t
+        c_prev = c_t
 
         # --------------------------------------------
         # Propagates gradients after every data sample
@@ -236,6 +241,7 @@ def eval():
     current_temp = temp_min
 
     # initialize variables and create arrays to store plotting data
+    c_prev = c_initial
     i=0
     action_pred_plot = np.zeros((traj_length-1, action_dim))
     # the /2 terms accounts for only predicting the next state (not previous)
@@ -246,9 +252,7 @@ def eval():
     for k in range(traj_length-1):
         data = traj_data[k]
         state, action = data[:,:state_dim], data[:,state_dim:]
-
         i += 1
-        c_prev = c_t_stored[i-1]
 
         # predict next actions, states, and options
         action_pred, next_state_pred, c_t = model(state,c_prev,current_temp,hard)
@@ -257,7 +261,8 @@ def eval():
         action_pred_plot[i-1] = action_pred.detach().numpy()
         next_state_pred_plot[i-1] = next_state_pred.detach().numpy()
         c_t_plot[i-1] = c_t.detach().numpy()
-        c_t_stored[i] = c_t
+        
+        c_prev = c_t
 
     return traj_data, true_segments
 
@@ -295,21 +300,35 @@ def run():
     # plot predicted values for the last epoch of training
     # policy
     if PLOT_RESULTS:
-        plt.figure()
-        plt.title('Evaluate Option-conditioned Policy')
+        if action_dim > 2:
+            n_plots_x = np.sqrt(action_dim)
+            n_plots_y = n_plots_x
+        else:
+            n_plots_x = 2
+            n_plots_y = 1
+        plt.figure(figsize=[4*n_plots_x,2*n_plots_x])
+        plt.suptitle('Evaluate Option-conditioned Policy')
         for i in range(action_dim):
+            plt.subplot(n_plots_x,n_plots_y,i+1)
             p = plt.plot(traj_data[:,:,state_dim+i], '-', label='a{}'.format(i))
             plt.plot(action_pred_plot[:,i], '--', color=p[0].get_color(), label='a{}_pred'.format(i))
-        plt.legend()
+            plt.grid()
         plt.savefig('eval_policy.png')
 
         # dynamics
-        plt.figure()
-        plt.title('Evaluate Option-conditioned Dynamics')
+        if int(state_dim/2) > 2:
+            n_plots = np.sqrt(int(state_dim/2))
+            n_plots_y = n_plots_x
+        else:
+            n_plots_x = 2
+            n_plots_y = 1
+        plt.figure(figsize=[4*n_plots_x,2*n_plots_x])
+        plt.suptitle('Evaluate Option-conditioned Dynamics')
         for i in range(int(state_dim/2)):
+            plt.subplot(n_plots_x,n_plots_y,i+1)
             p = plt.plot(traj_data[:,:,i], '-', label='s{}'.format(i))
             plt.plot(next_state_pred_plot[:,i], '--', color=p[0].get_color(), label='s{}_pred'.format(i))
-        plt.legend()
+            plt.grid()
         plt.savefig('eval_dynamics.png')
 
         # inference
