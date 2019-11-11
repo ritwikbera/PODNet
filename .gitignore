@@ -1,4 +1,5 @@
 # data folder
+results/*
 data/*
 robots/*
 *.png

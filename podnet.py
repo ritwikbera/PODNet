@@ -26,14 +26,20 @@ torch.manual_seed(seed)
 
 # -----------------------------------------------
 # Experiment hyperparameters
-PLOT_RESULTS = True
-epochs = 100
+PLOT_RESULTS = False
+EVAL_MODEL = False
+epochs = 50
 hard = False 
 
 # -----------------------------------------------
 # Environment
-# env_name = 'CircleWorld'
-env_name = 'PerimeterDef'
+exp_name = 'test'
+
+env_name = 'CircleWorld'
+# env_name = 'PerimeterDef'
+
+os.makedirs("results", exist_ok=True)
+os.makedirs(f"results/{exp_name}", exist_ok=True)
 
 if env_name == 'CircleWorld':
     state_dim = 4 # (x_t, y_t, x_prev, y_prev) of circle
@@ -71,7 +77,7 @@ elif env_name == 'PerimeterDef':
     mlp_hidden = 32
 
     # load dataset
-    dataset = np.genfromtxt('data/sample_robots.csv', delimiter=',')
+    dataset = np.genfromtxt('data/big_sample_robots.csv', delimiter=',')
     traj_data, true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
     traj_length = traj_data.shape[0]
 
@@ -85,7 +91,7 @@ elif env_name == 'PerimeterDef':
 
 
 class PODNet(nn.Module):
-    def __init__(self, temp):
+    def __init__(self):
         super(PODNet, self).__init__()
 
         #option inference layers
@@ -154,7 +160,7 @@ class PODNet(nn.Module):
         return action_pred, next_state_pred, c_t
 
 # create PODNet
-model = PODNet(temp)
+model = PODNet()
 optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
 loss_fn = torch.nn.MSELoss()
 
@@ -236,42 +242,6 @@ def train(epoch):
 
     return train_loss/i, L_BC_epoch/i, L_ODC_epoch/i, Reg_epoch/i, current_temp, L_TSR_epoch/i
 
-def eval():
-    model.eval()
-
-    global temp_min, hard
-    global temp_plot, next_state_pred_plot, action_pred_plot, c_t_plot
-    current_temp = temp_min
-
-    # initialize variables
-    c_prev = c_initial
-    i=0
-
-    # create arrays to store plotting data
-    action_pred_plot = np.zeros((traj_length-1, action_dim))
-    # the /2 terms accounts for only predicting the next state (not previous)
-    next_state_pred_plot = np.zeros((traj_length-1, int(state_dim/2)))
-    c_t_plot = np.zeros((traj_length-1, latent_dim*categorical_dim))
-
-    # TODO: load evaluation data
-
-    # loops until traj_length-1 because we need to use the next state as true_next_state
-    for k in range(traj_length-1):
-        data = traj_data[k]
-        state, action = data[:,:state_dim], data[:,state_dim:]
-        i += 1
-
-        # predict next actions, states, and options
-        action_pred, next_state_pred, c_t = model(state,c_prev,current_temp,hard)
-
-        # store predictions for plotting after training
-        action_pred_plot[i-1] = action_pred.detach().numpy()
-        next_state_pred_plot[i-1] = next_state_pred.detach().numpy()
-        c_t_plot[i-1] = c_t.detach().numpy()        
-        c_prev = c_t
-
-    return traj_data, true_segments
-
 def run():
     # create array to store loss values for plotting
     # format: epoch | train_loss | L_BC_epoch | L_ODC_epoch | Reg_epoch | temp | L_TSR_epoch
@@ -288,36 +258,38 @@ def run():
 
         # store loss values
         loss_plot[epoch-1] = epoch, train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch, current_temp, L_TSR_epoch
+
+        # save latest model checkpoint
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            }, f'results/{exp_name}/{env_name}_checkpoint.tar')
+
     print('[*] Total training time: {:.2f} minutes'.format((time.time()-start_train)/60))
 
+    # save final trained model
+    torch.save({
+        'env_name': env_name,
+        'exp_name': exp_name,
+        'temp_min': temp_min,
+        'hard': hard,
+        'state_dim': state_dim,
+        'action_dim': action_dim,
+        'categorical_dim': categorical_dim,
+        'latent_dim': latent_dim,
+        'c_initial': c_initial,
+        'loss_plot': loss_plot,
+        'model_state_dict': model.state_dict(),
+     }, f'results/{exp_name}/{env_name}_trained.pt')
+
     # evaluate model
-    traj_data, true_segments = eval()
-
-    # denormalize data for plotting
-    traj_data = traj_data.numpy().squeeze()
-    # ground truth
-    traj_data = denormalize(traj_data, traj_data_mean, traj_data_std)
-    # predicted
-    traj_data_plot = np.hstack((next_state_pred_plot, action_pred_plot))
-    traj_data_plot_mean = np.hstack(( traj_data_mean[:int(state_dim/2)], traj_data_mean[state_dim:] ))
-    traj_data_plot_std = np.hstack((traj_data_std[:int(state_dim/2)], traj_data_std[state_dim:]))
-    traj_data_plot = denormalize(traj_data_plot, traj_data_plot_mean, traj_data_plot_std)
-
-    # save plotting data as dict (to be plotted later)
-    experiment_data = {
-        "traj_data": traj_data,
-        "true_segments_int": true_segments_int,
-        "traj_data_plot": traj_data_plot,
-        "c_t_plot": c_t_plot,
-        "loss_plot": loss_plot,
-        "action_dim": action_dim,
-        "state_dim": state_dim,
-        "categorical_dim": categorical_dim
-    }
-    pickle.dump(experiment_data, open(f"{env_name}_plot.pickle", "wb"))
+    if EVAL_MODEL:
+        pass
 
     # plot
-    os.system(f"python plotting.py {env_name}_plot.pickle")
+    if PLOT_RESULTS:
+        os.system(f"python plotting.py results/{exp_name}/{env_name}_plot.pickle")
 
 if __name__ == '__main__':
     run()

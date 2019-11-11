@@ -4,7 +4,7 @@ Loads experiment data as pickle file and plot results.
 Usage: python plotting.py <address to pickle file with results>
 Example: python plotting.py CircleWorld_plot.pickle
 '''
-import sys
+import sys, os
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -17,6 +17,8 @@ file_addr = sys.argv[1]
 experiment_data = pickle.load(open(file_addr, "rb"))
 
 # parse variables
+env_name = experiment_data["env_name"]
+exp_name = experiment_data["exp_name"]
 traj_data = experiment_data["traj_data"]
 traj_data_plot = experiment_data["traj_data_plot"]
 true_segments_int = experiment_data["true_segments_int"]
@@ -25,6 +27,10 @@ loss_plot = experiment_data["loss_plot"]
 action_dim = experiment_data["action_dim"]
 state_dim = experiment_data["state_dim"]
 categorical_dim = experiment_data["categorical_dim"]
+
+# create saving directories
+os.makedirs("results", exist_ok=True)
+os.makedirs(f"results/{exp_name}", exist_ok=True)
 
 # plot
 if action_dim > 2:
@@ -40,7 +46,7 @@ for i in range(action_dim):
     p = plt.plot(traj_data[:,state_dim+i], '-', label='a{}'.format(i))
     plt.plot(traj_data_plot[:,int(state_dim/2)+i], '--', color=p[0].get_color(), label='a{}_pred'.format(i))
     plt.grid()
-plt.savefig('eval_policy.png')
+plt.savefig(f'results/{exp_name}/{env_name}_policy.png')
 
 # dynamics
 if int(state_dim/2) > 2:
@@ -56,7 +62,7 @@ for i in range(int(state_dim/2)):
     p = plt.plot(traj_data[:,i], '-', label='s{}'.format(i))
     plt.plot(traj_data_plot[:,i], '--', color=p[0].get_color(), label='s{}_pred'.format(i))
     plt.grid()
-plt.savefig('eval_dynamics.png')
+plt.savefig(f'results/{exp_name}/{env_name}_dynamics.png')
 
 # inference
 # postprocess true labels
@@ -65,7 +71,7 @@ plt.title('Evaluate Option Inference')
 plt.plot(true_segments_int,'D',alpha=0.5,label='truth')
 plt.plot(np.argmax(c_t_plot[:,:categorical_dim], axis=1), 'k.', label='pred')
 plt.legend()
-plt.savefig('eval_options.png')
+plt.savefig(f'results/{exp_name}/{env_name}_options.png')
 
 # plot losses
 plt.figure(figsize=[12,8])
@@ -88,6 +94,6 @@ plt.legend()
 plt.subplot(326)
 plt.plot(loss_plot[:,0], loss_plot[:,5], label='temp')
 plt.legend()
-plt.savefig('training_loss.png')
+plt.savefig(f'results/{exp_name}/{env_name}ning_loss.png')
 
 plt.show()
