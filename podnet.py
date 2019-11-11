@@ -2,6 +2,7 @@
 profile: python -m cProfile -o podnet.prof podnet.py
 viz: snakeviz podnet.prof
 '''
+import os
 import time
 import numpy as np
 import torch
@@ -14,6 +15,8 @@ sns.set(style='whitegrid')
 from circleworld import gen_circle_traj
 from gumbel import sample_gumbel, gumbel_softmax_sample, gumbel_softmax
 from utils import to_categorical, normalize, denormalize
+
+import pickle
 
 # -----------------------------------------------
 # Random seeds
@@ -29,8 +32,8 @@ hard = False
 
 # -----------------------------------------------
 # Environment
-env_name = 'CircleWorld'
-# env_name = 'PerimeterDef'
+# env_name = 'CircleWorld'
+env_name = 'PerimeterDef'
 
 if env_name == 'CircleWorld':
     state_dim = 4 # (x_t, y_t, x_prev, y_prev) of circle
@@ -65,10 +68,10 @@ elif env_name == 'PerimeterDef':
     temp_min = 0.1
     ANNEAL_RATE = 0.003
     learning_rate = 1e-4
-    mlp_hidden = 64
+    mlp_hidden = 32
 
     # load dataset
-    dataset = np.genfromtxt('data/big_sample_robots.csv', delimiter=',')
+    dataset = np.genfromtxt('data/sample_robots.csv', delimiter=',')
     traj_data, true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
     traj_length = traj_data.shape[0]
 
@@ -160,7 +163,7 @@ def loss_function(next_state_pred, true_next_state, action_pred, true_action, c_
     Lambda_1 = 1  
     Lambda_2 = 1
     
-    beta = 0.001
+    beta = 1e-4
 
     L_BC = Lambda_2 * loss_fn(action_pred, true_action)
     L_ODC = Lambda_1 * loss_fn(next_state_pred, true_next_state)
@@ -240,13 +243,17 @@ def eval():
     global temp_plot, next_state_pred_plot, action_pred_plot, c_t_plot
     current_temp = temp_min
 
-    # initialize variables and create arrays to store plotting data
+    # initialize variables
     c_prev = c_initial
     i=0
+
+    # create arrays to store plotting data
     action_pred_plot = np.zeros((traj_length-1, action_dim))
     # the /2 terms accounts for only predicting the next state (not previous)
     next_state_pred_plot = np.zeros((traj_length-1, int(state_dim/2)))
     c_t_plot = np.zeros((traj_length-1, latent_dim*categorical_dim))
+
+    # TODO: load evaluation data
 
     # loops until traj_length-1 because we need to use the next state as true_next_state
     for k in range(traj_length-1):
@@ -260,8 +267,7 @@ def eval():
         # store predictions for plotting after training
         action_pred_plot[i-1] = action_pred.detach().numpy()
         next_state_pred_plot[i-1] = next_state_pred.detach().numpy()
-        c_t_plot[i-1] = c_t.detach().numpy()
-        
+        c_t_plot[i-1] = c_t.detach().numpy()        
         c_prev = c_t
 
     return traj_data, true_segments
@@ -287,83 +293,31 @@ def run():
     # evaluate model
     traj_data, true_segments = eval()
 
-    # denormalize data before plotting
-    traj_data = traj_data.numpy()
-    # # ground truth
-    # traj_data = denormalize(traj_data, traj_data_mean, traj_data_std)
-    # # predicted
-    # traj_data_plot = np.hstack((next_state_pred_plot, action_pred_plot))
-    # traj_data_plot_mean = np.hstack(( traj_data_mean[:int(state_dim/2)], traj_data_mean[state_dim:] ))
-    # traj_data_plot_std = np.hstack((traj_data_std[:int(state_dim/2)], traj_data_std[state_dim:]))
-    # traj_data_plot = denormalize(traj_data_plot, traj_data_plot_mean, traj_data_plot_std)
+    # denormalize data for plotting
+    traj_data = traj_data.numpy().squeeze()
+    # ground truth
+    traj_data = denormalize(traj_data, traj_data_mean, traj_data_std)
+    # predicted
+    traj_data_plot = np.hstack((next_state_pred_plot, action_pred_plot))
+    traj_data_plot_mean = np.hstack(( traj_data_mean[:int(state_dim/2)], traj_data_mean[state_dim:] ))
+    traj_data_plot_std = np.hstack((traj_data_std[:int(state_dim/2)], traj_data_std[state_dim:]))
+    traj_data_plot = denormalize(traj_data_plot, traj_data_plot_mean, traj_data_plot_std)
 
-    # plot predicted values for the last epoch of training
-    # policy
-    if PLOT_RESULTS:
-        if action_dim > 2:
-            n_plots_x = np.sqrt(action_dim)
-            n_plots_y = n_plots_x
-        else:
-            n_plots_x = 2
-            n_plots_y = 1
-        plt.figure(figsize=[4*n_plots_x,2*n_plots_x])
-        plt.suptitle('Evaluate Option-conditioned Policy')
-        for i in range(action_dim):
-            plt.subplot(n_plots_x,n_plots_y,i+1)
-            p = plt.plot(traj_data[:,:,state_dim+i], '-', label='a{}'.format(i))
-            plt.plot(action_pred_plot[:,i], '--', color=p[0].get_color(), label='a{}_pred'.format(i))
-            plt.grid()
-        plt.savefig('eval_policy.png')
+    # save plotting data as dict (to be plotted later)
+    experiment_data = {
+        "traj_data": traj_data,
+        "true_segments_int": true_segments_int,
+        "traj_data_plot": traj_data_plot,
+        "c_t_plot": c_t_plot,
+        "loss_plot": loss_plot,
+        "action_dim": action_dim,
+        "state_dim": state_dim,
+        "categorical_dim": categorical_dim
+    }
+    pickle.dump(experiment_data, open(f"{env_name}_plot.pickle", "wb"))
 
-        # dynamics
-        if int(state_dim/2) > 2:
-            n_plots = np.sqrt(int(state_dim/2))
-            n_plots_y = n_plots_x
-        else:
-            n_plots_x = 2
-            n_plots_y = 1
-        plt.figure(figsize=[4*n_plots_x,2*n_plots_x])
-        plt.suptitle('Evaluate Option-conditioned Dynamics')
-        for i in range(int(state_dim/2)):
-            plt.subplot(n_plots_x,n_plots_y,i+1)
-            p = plt.plot(traj_data[:,:,i], '-', label='s{}'.format(i))
-            plt.plot(next_state_pred_plot[:,i], '--', color=p[0].get_color(), label='s{}_pred'.format(i))
-            plt.grid()
-        plt.savefig('eval_dynamics.png')
-
-        # inference
-        # postprocess true labels
-        plt.figure()
-        plt.title('Evaluate Option Inference')
-        plt.plot(true_segments_int,'D',alpha=0.5,label='truth')
-        plt.plot(np.argmax(c_t_plot[:,:categorical_dim], axis=1), 'k.', label='pred')
-        plt.legend()
-        plt.savefig('eval_options.png')
-
-        # plot losses
-        plt.figure(figsize=[12,8])
-        plt.suptitle('Training Loss')
-        plt.subplot(321)
-        plt.plot(loss_plot[:,0], loss_plot[:,1], label='train_loss')
-        plt.legend()
-        plt.subplot(322)
-        plt.plot(loss_plot[:,0], loss_plot[:,2], label='L_BC_epoch')
-        plt.legend()
-        plt.subplot(323)
-        plt.plot(loss_plot[:,0], loss_plot[:,3], label='L_ODC_epoch')
-        plt.legend()
-        plt.subplot(324)
-        plt.plot(loss_plot[:,0], loss_plot[:,4], label='Reg_epoch')
-        plt.legend()
-        plt.subplot(325)
-        plt.plot(loss_plot[:,0], loss_plot[:,6], label='L_TSR_epoch')
-        plt.legend()
-        plt.subplot(326)
-        plt.plot(loss_plot[:,0], loss_plot[:,5], label='temp')
-        plt.legend()
-        plt.savefig('training_loss.png')
-
-        plt.show()
+    # plot
+    os.system(f"python plotting.py {env_name}_plot.pickle")
 
 if __name__ == '__main__':
     run()

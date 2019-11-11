@@ -7,5 +7,6 @@ robots/*
 *.mat
 *.pyc
 *.prof
+*.pickle
 
 playground.py
