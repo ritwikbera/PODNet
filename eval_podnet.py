@@ -2,7 +2,8 @@
 Loads model, generate new data, evaluate it, and save plotting data.
 
 Usage: python eval_podnet.py <model address>
-Example: python eval_podnet.py results/test/CircleWorld_trained.pt
+Example: python eval_podnet.py results/circle/CircleWorld_trained.pt
+         python eval_podnet.py results/big_sample_robot/PerimeterDef_trained.pt
 '''
 import sys, os
 import torch
@@ -29,7 +30,7 @@ c_initial = model_data['c_initial']
 loss_plot = model_data['loss_plot']
 
 # load model
-model = PODNet()
+model = PODNet(state_dim,action_dim,latent_dim,categorical_dim)
 model.load_state_dict(model_data['model_state_dict'])
 model.eval()
 
@@ -38,7 +39,7 @@ model.eval()
 if env_name == 'CircleWorld':
     # generate normalized trajectory data
     traj_data, traj_data_mean, traj_data_std, true_segments_int = gen_circle_traj(
-        r_init=1, n_segments=3, plot_traj=False, save_csv=False)
+        r_init=1, n_segments=2, plot_traj=False, save_csv=False)
     traj_length = len(traj_data)
 
     # convert trajectory segments to pytorch format after one-hot encoding
