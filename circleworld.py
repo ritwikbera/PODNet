@@ -9,7 +9,7 @@ sns.set(style='whitegrid')
 from utils import normalize, denormalize
 
 
-def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False):
+def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False, save_csv_addr=None):
     state = []
     true_segments = []
     r = r_init
@@ -85,8 +85,10 @@ def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False):
 
     # save generated trajectory in a csv file
     if save_csv:
+        if save_csv_addr == None:
+            save_csv_addr = 'data/circle_traj.csv'
         np.savetxt(
-            'data/circle_traj.csv', np.hstack((traj_data, true_segments.reshape(-1,1))), delimiter=',')
+            save_csv_addr, np.hstack((traj_data, true_segments.reshape(-1,1))), delimiter=',')
 
     return torch.Tensor(np.expand_dims(traj_data, axis=1)), traj_data_mean, traj_data_std, true_segments
 

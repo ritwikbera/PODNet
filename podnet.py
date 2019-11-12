@@ -18,10 +18,8 @@ from utils import to_categorical, normalize, denormalize
 
 import pickle
 
-use_recurrent = True
-
 class OptionEncoder(nn.Module):
-    def __init__(self, output_size, input_size, hidden_layer_size=100, num_layers=2):
+    def __init__(self, output_size, input_size, hidden_layer_size=32, num_layers=2):
         super().__init__()
         self.hidden_layer_size = hidden_layer_size
         self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers)
@@ -38,7 +36,7 @@ class OptionEncoder(nn.Module):
         return predictions.squeeze(0)  #single length input so squeeze out seq_len dimension
 
 class PODNet(nn.Module):
-    def __init__(self, state_dim, action_dim, latent_dim, categorical_dim, mlp_hidden=32):
+    def __init__(self, state_dim, action_dim, latent_dim, categorical_dim, mlp_hidden=32, use_recurrent=False):
         super(PODNet, self).__init__()
 
         # inputs parameters
@@ -46,6 +44,8 @@ class PODNet(nn.Module):
         self.action_dim = action_dim
         self.latent_dim = latent_dim
         self.categorical_dim = categorical_dim
+        self.use_recurrent = use_recurrent
+        
 
         if use_recurrent:
             self.OptInference = OptionEncoder(output_size=latent_dim*categorical_dim, 
@@ -110,13 +110,13 @@ class PODNet(nn.Module):
         return self.fc9(h2)
 
     def forward(self, s_t, c_prev, temp, hard):
-        if use_recurrent:
-            q = recurrent_encode(s_t, c_prev)
+        if self.use_recurrent:
+            q = self.recurrent_encode(s_t, c_prev)
         else:
             x = torch.cat((s_t, c_prev), -1)
             q = self.encode(x.view(-1, self.state_dim + self.latent_dim*self.categorical_dim))
         q_y = q.view(q.size(0), self.latent_dim, self.categorical_dim)
-        c_t = gumbel_softmax(q_y, temp, self.latent_dim, self.categorical_dim, hard)
+        c_t = gumbel_softmax(q_y, temp, self.latent_dim, self.categorical_dim, hard, device=self.device)
 
         action_pred = self.decode_action(s_t, c_t, c_prev)
         next_state_pred = self.decode_next_state(s_t, c_t, c_prev)
@@ -141,7 +141,13 @@ class PODNet(nn.Module):
         return L_BC, L_ODC, beta*KLD
 
 
-def run(EVAL_MODEL, epochs, hard, exp_name, env_name):
+def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
+    # if available, use single GPU to train PODNet
+    if torch.cuda.is_available():  
+        device = torch.device("cuda:0")
+    else:  
+        device = torch.device("cpu")
+
     # parse env parameters
     if env_name == 'CircleWorld':
         state_dim = 4 # (x_t, y_t, x_prev, y_prev) of circle
@@ -158,7 +164,7 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name):
 
         # generate normalized trajectory data
         traj_data, traj_data_mean, traj_data_std, true_segments_int = gen_circle_traj(
-            r_init=1, n_segments=2, plot_traj=False, save_csv=False)
+            r_init=1, n_segments=2, plot_traj=False, save_csv=True)
         traj_length = len(traj_data)
 
         # convert trajectory segments to pytorch format after one-hot encoding
@@ -166,6 +172,11 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name):
         c_initial = torch.Tensor([[1,0]])
 
     elif env_name == 'PerimeterDef':
+        # Option labels:
+        #   1 - CYCLIC PURSUIT
+        #   2 - LEADER-FOLLOWER
+        #   3 - FORMATION - CIRCLE
+        #   4 - FORMATION - CONE
         state_dim = 32 # includes previous states
         action_dim = 16
         latent_dim = 1 # has a similar effect to multi-head attention
@@ -179,7 +190,7 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name):
         mlp_hidden = 32
 
         # load dataset
-        dataset = np.genfromtxt('data/big_sample_robots.csv', delimiter=',')
+        dataset = np.genfromtxt('data/sample_robots.csv', delimiter=',')
         traj_data, true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
         traj_length = traj_data.shape[0]
 
@@ -191,14 +202,21 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name):
         true_segments = torch.from_numpy(to_categorical(true_segments_int))
         c_initial = torch.Tensor([[1,0,0,0]])
 
+    # send data to current device (CPU or GPU)
+    traj_data = traj_data.to(device)
+    true_segments = true_segments.to(device)
+    c_initial = c_initial.to(device)
+
     # create PODNet
     model = PODNet(
         state_dim=state_dim,
         action_dim=action_dim,
         latent_dim=latent_dim,
         categorical_dim=categorical_dim,
-        mlp_hidden=mlp_hidden
-    )
+        mlp_hidden=mlp_hidden,
+        use_recurrent=use_recurrent
+    ).to(device)
+    model.device = device
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
         
     # create array to store loss values for plotting
@@ -294,11 +312,13 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name):
         'latent_dim': latent_dim,
         'c_initial': c_initial,
         'loss_plot': loss_plot,
+        'use_recurrent': use_recurrent,
         'model_state_dict': model.state_dict(),
      }, f'results/{exp_name}/{env_name}_trained.pt')
 
     # evaluate model
     if EVAL_MODEL:
+        print('[*] Running trained model on evaluation data.')
         os.system(f"python eval_podnet.py results/{exp_name}/{env_name}_trained.pt")
 
 
@@ -311,21 +331,21 @@ if __name__ == '__main__':
 
     # -----------------------------------------------
     # Experiment hyperparameters
-    PLOT_RESULTS = True
     EVAL_MODEL = True
     epochs = 100
     hard = False 
+    use_recurrent = False
 
     # -----------------------------------------------
     # Environment
-    exp_name = 'circle'
+    exp_name = 'circle_recurrent'
     env_name = 'CircleWorld'
 
-    # exp_name = 'big_sample_robot'
+    # exp_name = 'sample_robot'
     # env_name = 'PerimeterDef'
 
     os.makedirs("results", exist_ok=True)
     os.makedirs(f"results/{exp_name}", exist_ok=True)
 
     # train PODNet
-    run(EVAL_MODEL, epochs, hard, exp_name, env_name)
+    run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent)

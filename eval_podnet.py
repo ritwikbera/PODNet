@@ -14,6 +14,12 @@ from circleworld import gen_circle_traj
 from utils import to_categorical, normalize, denormalize
 from podnet import PODNet
 
+# -----------------------------------------------
+# Random seeds
+seed = 2
+np.random.seed(seed)
+torch.manual_seed(seed)
+
 # parse arguments
 PLOT_RESULTS = True
 model_addr = sys.argv[1]
@@ -22,6 +28,7 @@ env_name = model_data['env_name']
 exp_name = model_data['exp_name']
 temp_min = model_data['temp_min']
 hard = model_data['hard']
+use_recurrent = model_data['use_recurrent']
 state_dim = model_data['state_dim']
 action_dim = model_data['action_dim']
 categorical_dim = model_data['categorical_dim']
@@ -30,7 +37,7 @@ c_initial = model_data['c_initial']
 loss_plot = model_data['loss_plot']
 
 # load model
-model = PODNet(state_dim,action_dim,latent_dim,categorical_dim)
+model = PODNet(state_dim,action_dim,latent_dim,categorical_dim,use_recurrent=use_recurrent)
 model.load_state_dict(model_data['model_state_dict'])
 model.eval()
 
