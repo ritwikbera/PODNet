@@ -280,17 +280,9 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
             L_TSR = 0
             # L_TSR = 1-torch.dot(c_t_stored[i].squeeze(),c_t_stored[i-1].squeeze())
 
-            # -----------------------------------------------------------------------
-            # *** IMPORTANT ***
-            # VGG (Nov/9/2019): This line slows down the code.
-            # It stores a pytorch together with the complete loss graph. Since this
-            # is called at every data sample of every epoch, it was a massive sink
-            # of computational resources.
-            # Modified code to only save current and previous c.
-            # c_t_stored[i] = c_t
-            c_prev = c_t
+            # save predicted c_t to use as previous c_t on next iteration
+            c_prev = c_t.detach()
 
-            # --------------------------------------------
             # Propagates gradients after every data sample
             L_BC_epoch += L_BC.item()
             L_ODC_epoch += L_ODC.item()
@@ -312,7 +304,7 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
 
         epoch_time = time.time()-start_epoch
         print('Epoch time: {:.2f} seconds. Estimated {:.2f} minutes or {:.2f} hours left to complete training.'.format(
-            epoch_time, (epochs-epoch)*epoch_time/60, (epochs-epoch)*epoch_time/360))
+            epoch_time, (epochs-epoch)*epoch_time/60, (epochs-epoch)*epoch_time/3600))
 
         # store loss values
         loss_plot[epoch-1] = epoch, train_loss/i, L_BC_epoch/i, L_ODC_epoch/i, Reg_epoch/i, current_temp, L_TSR_epoch/i
@@ -364,11 +356,11 @@ if __name__ == '__main__':
 
     # -----------------------------------------------
     # Environment
-    exp_name = 'circle'
-    env_name = 'CircleWorld'
+    # exp_name = 'circle'
+    # env_name = 'CircleWorld'
 
-    # exp_name = '3_stacked_robot'
-    # env_name = 'PerimeterDef'
+    exp_name = '3_stacked_robot'
+    env_name = 'PerimeterDef'
 
     os.makedirs("results", exist_ok=True)
     os.makedirs(f"results/{exp_name}", exist_ok=True)
