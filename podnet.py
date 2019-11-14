@@ -283,7 +283,7 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
 
             # save predicted c_t to use as previous c_t on next iteration
             #c_prev = c_t.detach()
-            c_prev = Variable(c_t.data.clone(), required_grad=False)
+            c_prev = Variable(c_t.data.clone(), requires_grad=False)
 
             # Propagates gradients after every data sample
             L_BC_epoch += L_BC.item()

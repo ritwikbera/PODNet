@@ -3,7 +3,8 @@ Loads model, generate new data, evaluate it, and save plotting data.
 
 Usage: python eval_podnet.py <model address>
 Example: python eval_podnet.py results/circle/CircleWorld_trained.pt
-         python eval_podnet.py results/big_sample_robot/PerimeterDef_trained.pt
+         python eval_podnet.py results/3_robot/PerimeterDef_trained.pt
+         python eval_podnet.py results/sample_robot/PerimeterDef_trained.pt data/sample_robots.csv
 '''
 import sys, os
 import torch
@@ -22,7 +23,13 @@ torch.manual_seed(seed)
 
 # parse arguments
 PLOT_RESULTS = True
+# parse model to be loaded
 model_addr = sys.argv[1]
+# parse evaluation dataset to be loaded
+try:
+    eval_file = sys.argv[2]
+except:
+    eval_file = None
 model_data = torch.load(model_addr)
 env_name = model_data['env_name']
 exp_name = model_data['exp_name']
@@ -60,7 +67,11 @@ if env_name == 'CircleWorld':
 
 elif env_name == 'PerimeterDef':
     # load dataset
-    dataset = np.genfromtxt('data/16_log.csv', delimiter=',')
+    if eval_file == None:
+        eval_file_addr = 'data/3_log.csv'
+    else:
+        eval_file_adrr = eval_file
+    dataset = np.genfromtxt(eval_file_adrr, delimiter=',')
     traj_data, true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
     traj_length = traj_data.shape[0]
 
