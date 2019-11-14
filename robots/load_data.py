@@ -177,69 +177,78 @@ class DataProcessor(object):
 # Main starting point
 if __name__ =='__main__':
 
+    data_source_dir = 'data_w_ground_truth/'
     data_dir = 'data/'
+    downsample_factor = 10
     
-    # data files
-    datafiles = [f for f in listdir(data_dir) if isfile(join(data_dir, f))]
-    
-    # load data
-    train_data = DataProcessor(file_dir = data_dir, files = datafiles, randomize = False)
+    # aggregate data files
+    datafiles = [f for f in listdir(data_source_dir) if isfile(join(data_source_dir, f))]
+        
+    # parse one by one so we have individual files for each episode
+    for k in range(len(datafiles)):
+        # load data
+        print(datafiles[k])
+        train_data = DataProcessor(file_dir = data_source_dir, files = [datafiles[k]], randomize = False)
 
-    # visualize data
-    t_initial = 0#775
-    t_limit = train_data.labels_gt.shape[0]#1530
-    plt.figure()
-    plt.title('Sample Options')
-    plt.plot(train_data.labels_gt[t_initial:t_limit])
-    plt.ylabel('Option')
-    plt.xlabel('Time Steps')
-    plt.tight_layout()
-    plt.savefig('robot_options.png')
+        # downsample data, if desired
+        x_real = train_data.x_real[::downsample_factor]
+        labels_gt = train_data.labels_gt[::downsample_factor]
 
-    plt.figure()
-    plt.title('Sample States')
-    plt.ylabel('Position Y')
-    plt.xlabel('Position X')
-    plt.plot(train_data.x_real[t_initial:t_limit,0], train_data.x_real[t_initial:t_limit,1], 'o', alpha=0.1, label='r1')
-    plt.plot(train_data.x_real[t_initial:t_limit,2], train_data.x_real[t_initial:t_limit,3], 'o', alpha=0.1, label='r2')
-    plt.plot(train_data.x_real[t_initial:t_limit,4], train_data.x_real[t_initial:t_limit,5], 'o', alpha=0.1, label='r3')
-    plt.plot(train_data.x_real[t_initial:t_limit,6], train_data.x_real[t_initial:t_limit,7], 'o', alpha=0.1, label='r4')
-    plt.plot(train_data.x_real[t_initial:t_limit,8], train_data.x_real[t_initial:t_limit,9], 'o', alpha=0.1, label='r5')
-    plt.plot(train_data.x_real[t_initial:t_limit,10], train_data.x_real[t_initial:t_limit,11], 'o', alpha=0.1, label='r6')
-    plt.plot(train_data.x_real[t_initial:t_limit,12], train_data.x_real[t_initial:t_limit,13], 'o', alpha=0.1, label='i1')
-    plt.plot(train_data.x_real[t_initial:t_limit,14], train_data.x_real[t_initial:t_limit,15], 'o', alpha=0.1, label='i2')
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig('robot_states.png')
+        # visualize data
+        t_initial = 0
+        t_limit = labels_gt.shape[0]
+        plt.figure()
+        plt.title('Sample Options')
+        plt.plot(labels_gt[t_initial:t_limit])
+        plt.ylabel('Option')
+        plt.xlabel('Time Steps')
+        plt.tight_layout()
+        plt.savefig(data_dir+'{}_options.png'.format(k))
 
-    # save data sample
-    # concatenate current and previous states
-    next_states = train_data.x_real[1+t_initial:t_limit,:]
-    prev_states = train_data.x_real[t_initial:t_limit-1,:]
-    state = np.hstack((next_states, prev_states))
-    # create action vectors (difference between states)
-    action = state[:,0:16]-state[:,16:]
+        plt.figure()
+        plt.title('Sample States')
+        plt.ylabel('Position Y')
+        plt.xlabel('Position X')
+        plt.plot(x_real[t_initial:t_limit,0], x_real[t_initial:t_limit,1], 'o', alpha=0.1, label='r1')
+        plt.plot(x_real[t_initial:t_limit,2], x_real[t_initial:t_limit,3], 'o', alpha=0.1, label='r2')
+        plt.plot(x_real[t_initial:t_limit,4], x_real[t_initial:t_limit,5], 'o', alpha=0.1, label='r3')
+        plt.plot(x_real[t_initial:t_limit,6], x_real[t_initial:t_limit,7], 'o', alpha=0.1, label='r4')
+        plt.plot(x_real[t_initial:t_limit,8], x_real[t_initial:t_limit,9], 'o', alpha=0.1, label='r5')
+        plt.plot(x_real[t_initial:t_limit,10], x_real[t_initial:t_limit,11], 'o', alpha=0.1, label='r6')
+        plt.plot(x_real[t_initial:t_limit,12], x_real[t_initial:t_limit,13], 'o', alpha=0.1, label='i1')
+        plt.plot(x_real[t_initial:t_limit,14], x_real[t_initial:t_limit,15], 'o', alpha=0.1, label='i2')
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(data_dir+'{}_states.png'.format(k))
 
-    # parse options
-    option = train_data.labels_gt[1+t_initial:t_limit]
+        # save data sample
+        # concatenate current and previous states
+        next_states = x_real[1+t_initial:t_limit,:]
+        prev_states = x_real[t_initial:t_limit-1,:]
+        state = np.hstack((next_states, prev_states))
+        # create action vectors (difference between states)
+        action = state[:,0:16]-state[:,16:]
 
-    # filter actions
-    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.filtfilt.html#scipy.signal.filtfilt
-    b, a = signal.ellip(4, 0.01, 120, 0.125)  # Filter to be applied
-    f_action = np.copy(action)
-    for i in range(f_action.shape[1]):
-        f_action[:,i] = signal.filtfilt(b, a, f_action[:,i], padlen=50)
+        # parse options
+        option = labels_gt[1+t_initial:t_limit]
 
-    plt.figure(figsize=[12,6])
-    plt.suptitle('Example of Filtered Actions')
-    for i in range(9):
-        plt.subplot(int(331+i))
-        plt.plot(action[:,i], '-', alpha=0.5)
-        plt.plot(f_action[:,i], '--')
-        plt.grid()
-    plt.savefig('robot_actions.png', dpi=300)
+        # filter actions
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.filtfilt.html#scipy.signal.filtfilt
+        b, a = signal.ellip(4, 0.01, 120, 0.125)  # Filter to be applied
+        f_action = np.copy(action)
+        for i in range(f_action.shape[1]):
+            f_action[:,i] = signal.filtfilt(b, a, f_action[:,i], padlen=50)
 
-    plt.show()
+        plt.figure(figsize=[12,6])
+        plt.suptitle('Example of Filtered Actions')
+        for i in range(9):
+            plt.subplot(int(331+i))
+            plt.plot(action[:,i], '-', alpha=0.5)
+            plt.plot(f_action[:,i], '--')
+            plt.grid()
+        plt.savefig(data_dir+'{}_actions.png'.format(k), dpi=300)
 
-    # save data sample
-    np.savetxt('big_sample_robots.csv', np.hstack((state,f_action,option)), delimiter=',')
+        # plt.show()
+
+        # save data sample
+        np.savetxt(data_dir+'{}_log.csv'.format(k), np.hstack((state,f_action,option)), delimiter=',')

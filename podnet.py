@@ -44,8 +44,7 @@ class PODNet(nn.Module):
         self.action_dim = action_dim
         self.latent_dim = latent_dim
         self.categorical_dim = categorical_dim
-        self.use_recurrent = use_recurrent
-        
+        self.use_recurrent = use_recurrent    
 
         if use_recurrent:
             self.OptInference = OptionEncoder(output_size=latent_dim*categorical_dim, 
@@ -148,6 +147,10 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
     else:  
         device = torch.device("cpu")
 
+    # GPU not working for recurrent case
+    if use_recurrent:
+        device = torch.device("cpu")
+
     # parse env parameters
     if env_name == 'CircleWorld':
         state_dim = 4 # (x_t, y_t, x_prev, y_prev) of circle
@@ -190,7 +193,7 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
         mlp_hidden = 32
 
         # load dataset
-        dataset = np.genfromtxt('data/sample_robots.csv', delimiter=',')
+        dataset = np.genfromtxt('data/big_sample_robots.csv', delimiter=',')
         traj_data, true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
         traj_length = traj_data.shape[0]
 
@@ -338,11 +341,11 @@ if __name__ == '__main__':
 
     # -----------------------------------------------
     # Environment
-    exp_name = 'circle_recurrent'
-    env_name = 'CircleWorld'
+    # exp_name = 'circle'
+    # env_name = 'CircleWorld'
 
-    # exp_name = 'sample_robot'
-    # env_name = 'PerimeterDef'
+    exp_name = 'big_sample_robot'
+    env_name = 'PerimeterDef'
 
     os.makedirs("results", exist_ok=True)
     os.makedirs(f"results/{exp_name}", exist_ok=True)

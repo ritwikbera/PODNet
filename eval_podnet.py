@@ -36,11 +36,17 @@ latent_dim = model_data['latent_dim']
 c_initial = model_data['c_initial']
 loss_plot = model_data['loss_plot']
 
-# load model
-model = PODNet(state_dim,action_dim,latent_dim,categorical_dim,use_recurrent=use_recurrent)
-model.load_state_dict(model_data['model_state_dict'])
-model.eval()
+# # if available, use single GPU to train PODNet
+# TODO: evaluation was not working with GPU
+device = torch.device("cpu")
+# if torch.cuda.is_available():  
+#     device = torch.device("cuda:0")
+# else:  
+#     device = torch.device("cpu")
 
+# # GPU not working for recurrent case
+# if use_recurrent:
+#     device = torch.device("cpu")
 
 # load evaluation data
 if env_name == 'CircleWorld':
@@ -64,6 +70,17 @@ elif env_name == 'PerimeterDef':
 
     # convert trajectory segments to pytorch format after one-hot encoding
     true_segments = torch.from_numpy(to_categorical(true_segments_int))
+
+# send data to current device (CPU or GPU)
+traj_data = traj_data.to(device)
+true_segments = true_segments.to(device)
+c_initial = c_initial.to(device)
+
+# create PODNet and load trained model
+model = PODNet(state_dim,action_dim,latent_dim,categorical_dim,use_recurrent=use_recurrent)
+model.device = device
+model.load_state_dict(model_data['model_state_dict'])
+model.eval()
 
 # initialize variables
 current_temp = temp_min
