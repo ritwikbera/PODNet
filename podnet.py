@@ -311,8 +311,8 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
             L_ODC_epoch/i, L_BC_epoch/i, Reg_epoch/i, L_TSR_epoch/i, current_temp))
 
         epoch_time = time.time()-start_epoch
-        print('Epoch time: {:.2f} seconds. Estimated {} minutes left to complete training.'.format(
-            epoch_time, (epochs-epoch)*epoch_time/60))
+        print('Epoch time: {:.2f} seconds. Estimated {:.2f} minutes or {:.2f} hours left to complete training.'.format(
+            epoch_time, (epochs-epoch)*epoch_time/60, (epochs-epoch)*epoch_time/360))
 
         # store loss values
         loss_plot[epoch-1] = epoch, train_loss/i, L_BC_epoch/i, L_ODC_epoch/i, Reg_epoch/i, current_temp, L_TSR_epoch/i
@@ -364,11 +364,11 @@ if __name__ == '__main__':
 
     # -----------------------------------------------
     # Environment
-    # exp_name = 'circle'
-    # env_name = 'CircleWorld'
+    exp_name = 'circle'
+    env_name = 'CircleWorld'
 
-    exp_name = '3_stacked_robot'
-    env_name = 'PerimeterDef'
+    # exp_name = '3_stacked_robot'
+    # env_name = 'PerimeterDef'
 
     os.makedirs("results", exist_ok=True)
     os.makedirs(f"results/{exp_name}", exist_ok=True)
