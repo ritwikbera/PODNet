@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch import nn, optim
 from torch.nn import functional as F
+from torch.autograd import Variable
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set(style='whitegrid')
@@ -281,7 +282,8 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
             # L_TSR = 1-torch.dot(c_t_stored[i].squeeze(),c_t_stored[i-1].squeeze())
 
             # save predicted c_t to use as previous c_t on next iteration
-            c_prev = c_t.detach()
+            #c_prev = c_t.detach()
+            c_prev = Variable(c_t.data.clone(), required_grad=False)
 
             # Propagates gradients after every data sample
             L_BC_epoch += L_BC.item()
@@ -290,7 +292,7 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
             L_TSR_epoch += 0#L_TSR.item()
 
             loss = L_BC + L_ODC + Reg + L_TSR
-            loss.backward(retain_graph=True)
+            loss.backward(retain_graph=False)
             train_loss += loss.item()
             optimizer.step()
 
