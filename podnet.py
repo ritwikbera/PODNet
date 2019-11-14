@@ -193,10 +193,28 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
         mlp_hidden = 32
 
         # load dataset
-        dataset = np.genfromtxt('data/big_sample_robots.csv', delimiter=',')
-        traj_data, true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
+        # dataset = np.genfromtxt('data/big_sample_robots.csv', delimiter=',')
+        dataset_list = [
+            'data/3_log.csv',
+            'data/5_log.csv',
+            'data/8_log.csv'
+            #'data/9_log.csv',
+            #'data/11_log.csv',
+            #'data/12_log.csv',
+            ]
+        item_counter = 0
+        for each_item in dataset_list:
+            dataset = np.genfromtxt(each_item, delimiter=',')
+            new_traj_data, new_true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
+            if item_counter > 0:
+                # using more then one datafile, stack to previous one
+                traj_data = np.vstack((traj_data, new_traj_data))
+                true_segments_int = np.vstack((true_segments_int, true_segments_int))
+            else:
+                traj_data = new_traj_data
+                true_segments_int = new_true_segments_int
         traj_length = traj_data.shape[0]
-
+        
         # normalize states and actions and convert to pytorch format
         traj_data, traj_data_mean, traj_data_std = normalize(traj_data)
         traj_data = torch.Tensor(np.expand_dims(traj_data, axis=1))
@@ -335,7 +353,7 @@ if __name__ == '__main__':
     # -----------------------------------------------
     # Experiment hyperparameters
     EVAL_MODEL = True
-    epochs = 100
+    epochs = 150
     hard = False 
     use_recurrent = False
 
@@ -344,7 +362,7 @@ if __name__ == '__main__':
     # exp_name = 'circle'
     # env_name = 'CircleWorld'
 
-    exp_name = 'big_sample_robot'
+    exp_name = 'stacked_robot'
     env_name = 'PerimeterDef'
 
     os.makedirs("results", exist_ok=True)

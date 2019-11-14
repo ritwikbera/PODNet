@@ -60,7 +60,7 @@ if env_name == 'CircleWorld':
 
 elif env_name == 'PerimeterDef':
     # load dataset
-    dataset = np.genfromtxt('data/sample_robots.csv', delimiter=',')
+    dataset = np.genfromtxt('data/16_log.csv', delimiter=',')
     traj_data, true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
     traj_length = traj_data.shape[0]
 
