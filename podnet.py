@@ -193,10 +193,31 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
         mlp_hidden = 32
 
         # load dataset
-        dataset = np.genfromtxt('data/big_sample_robots.csv', delimiter=',')
-        traj_data, true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
+        # dataset = np.genfromtxt('data/big_sample_robots.csv', delimiter=',')
+        dataset_list = [
+            'data/3_log.csv',
+            'data/5_log.csv',
+            'data/8_log.csv',
+            #'data/9_log.csv',
+            #'data/11_log.csv',
+            #'data/12_log.csv',
+            ]
+        item_counter = 0
+        for each_item in dataset_list:
+            print('Loading {} dataset.'.format(each_item))
+            dataset = np.genfromtxt(each_item, delimiter=',')
+            new_traj_data, new_true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
+            if item_counter > 0:
+                # using more then one datafile, stack to previous one
+                traj_data = np.vstack((traj_data, new_traj_data))
+                true_segments_int = np.vstack((true_segments_int, true_segments_int))
+            else:
+                traj_data = new_traj_data
+                true_segments_int = new_true_segments_int
+            item_counter += 1
         traj_length = traj_data.shape[0]
-
+        print('[*] Using {} robot data points.'.format(traj_length))
+        
         # normalize states and actions and convert to pytorch format
         traj_data, traj_data_mean, traj_data_std = normalize(traj_data)
         traj_data = torch.Tensor(np.expand_dims(traj_data, axis=1))
@@ -289,7 +310,9 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
         print('L_ODC: {:.4f} L_BC: {:.4f} Reg: {:.5f} L_TSR: {:.5f} temp: {:.2f}'.format(
             L_ODC_epoch/i, L_BC_epoch/i, Reg_epoch/i, L_TSR_epoch/i, current_temp))
 
-        print('Epoch time: {:.2f} seconds'.format(time.time()-start_epoch))
+        epoch_time = time.time()-start_epoch
+        print('Epoch time: {:.2f} seconds. Estimated {} minutes left to complete training.'.format(
+            epoch_time, (epochs-epoch)*epoch_time/60))
 
         # store loss values
         loss_plot[epoch-1] = epoch, train_loss/i, L_BC_epoch/i, L_ODC_epoch/i, Reg_epoch/i, current_temp, L_TSR_epoch/i
@@ -335,7 +358,7 @@ if __name__ == '__main__':
     # -----------------------------------------------
     # Experiment hyperparameters
     EVAL_MODEL = True
-    epochs = 100
+    epochs = 150
     hard = False 
     use_recurrent = False
 
@@ -344,7 +367,7 @@ if __name__ == '__main__':
     # exp_name = 'circle'
     # env_name = 'CircleWorld'
 
-    exp_name = 'big_sample_robot'
+    exp_name = '3_stacked_robot'
     env_name = 'PerimeterDef'
 
     os.makedirs("results", exist_ok=True)
