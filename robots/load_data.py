@@ -179,7 +179,7 @@ if __name__ =='__main__':
 
     data_source_dir = 'data_w_ground_truth/'
     data_dir = 'data/'
-    downsample_factor = 10
+    downsample_factor = 1
     
     # aggregate data files
     datafiles = [f for f in listdir(data_source_dir) if isfile(join(data_source_dir, f))]
@@ -203,7 +203,7 @@ if __name__ =='__main__':
         plt.ylabel('Option')
         plt.xlabel('Time Steps')
         plt.tight_layout()
-        plt.savefig(data_dir+'{}_options.png'.format(k))
+        plt.savefig(data_dir+'{}_{}dsf_options.png'.format(k,downsample_factor))
 
         plt.figure()
         plt.title('Sample States')
@@ -219,7 +219,7 @@ if __name__ =='__main__':
         plt.plot(x_real[t_initial:t_limit,14], x_real[t_initial:t_limit,15], 'o', alpha=0.1, label='i2')
         plt.legend()
         plt.tight_layout()
-        plt.savefig(data_dir+'{}_states.png'.format(k))
+        plt.savefig(data_dir+'{}_{}dsf_states.png'.format(k,downsample_factor))
 
         # save data sample
         # concatenate current and previous states
@@ -246,9 +246,9 @@ if __name__ =='__main__':
             plt.plot(action[:,i], '-', alpha=0.5)
             plt.plot(f_action[:,i], '--')
             plt.grid()
-        plt.savefig(data_dir+'{}_actions.png'.format(k), dpi=300)
+        plt.savefig(data_dir+'{}_{}dsf_actions.png'.format(k,downsample_factor), dpi=300)
 
         # plt.show()
 
         # save data sample
-        np.savetxt(data_dir+'{}_log.csv'.format(k), np.hstack((state,f_action,option)), delimiter=',')
+        np.savetxt(data_dir+'{}_{}dsf_log.csv'.format(k,downsample_factor), np.hstack((state,f_action,option)), delimiter=',')

@@ -5,6 +5,7 @@ Usage: python eval_podnet.py <model address>
 Example: python eval_podnet.py results/circle/CircleWorld_trained.pt
          python eval_podnet.py results/3_robot/PerimeterDef_trained.pt
          python eval_podnet.py results/sample_robot/PerimeterDef_trained.pt data/sample_robots.csv
+         python eval_podnet.py results/full_stacked_robot/PerimeterDef_trained.pt data/16_log.csv
 '''
 import sys, os
 import torch

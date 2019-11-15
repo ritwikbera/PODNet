@@ -1,10 +1,9 @@
 ''' rollout.py
 Loads model and rollouts PODNet's network based on initial state and option.
 
-Usage: python rollout.py <model address>
-Example: python rollout.py results/circle/CircleWorld_trained.pt
-         python rollout.py results/sample_robot/PerimeterDef_trained.pt
-         python rollout.py results/sample_robot/PerimeterDef_trained.pt data/sample_robots.csv
+Usage: python rollout.py <model address> <data for initial conditions> <traj_length>
+Example: python rollout.py results/sample_robot/PerimeterDef_trained.pt data/sample_robots.csv 250
+         python rollout.py results/full_stacked_robot/PerimeterDef_trained.pt data/16_log.csv 25
 '''
 import sys, os
 import torch
@@ -115,8 +114,8 @@ for c_to_rollout in c_to_rollouts:
     i=0
     c_prev = c_to_rollout
     # use initial states as starting point
-    traj_length = 1000
-    state = traj_data[0][:,:state_dim]
+    traj_length = int(sys.argv[3])
+    state = traj_data[0][:,:state_dim] #+ torch.Tensor(np.random.rand(32))
 
     # create arrays to store plotting data
     action_pred_plot = np.zeros((traj_length-1, action_dim))
@@ -183,37 +182,43 @@ for c_to_rollout in c_to_rollouts:
                 plt.plot(traj_data_plot[-1,0], traj_data_plot[-1,1], 'b^', label='Defender', markersize=10)
             # plot robot final position
             p = plt.plot(traj_data_plot[-1,0+i], traj_data_plot[-1,1+i], 'b^', markersize=10)
+            # plot robot initial position
+            plt.plot(traj_data_plot[0,0+i], traj_data_plot[0,1+i], 'bx', markersize=10)
             # plot trajectory
-            plt.plot(traj_data_plot[:,0+i], traj_data_plot[:,1+i], 'b.', color=p[0].get_color(), alpha=0.1)
+            plt.plot(traj_data_plot[:,0+i], traj_data_plot[:,1+i], 'b--', color=p[0].get_color(), alpha=0.5)
         # plot initial position and trajectory of each robot
         for i in range(n_intruders):
             if i == 0:
-                # plot robot final position
+                # plot robot final position with label
                 plt.plot(traj_data_plot[-1,n_robots+0], traj_data_plot[-1,n_robots+1], 'rs', label='Intruder', markersize=10)
                 # plot option being followed
                 c_to_rollout_label = option_legends[np.argmax(c_to_rollout.numpy())]
                 plt.plot(traj_data_plot[-1,n_robots+0], traj_data_plot[-1,n_robots+1], '-k', label=c_to_rollout_label, markersize=10)
             # plot robot final position
             p = plt.plot(traj_data_plot[-1,n_robots+i], traj_data_plot[-1,n_robots+1+i], 'rs', markersize=10)
+            # plot robot initial position
+            plt.plot(traj_data_plot[0,n_robots+0+i], traj_data_plot[0,n_robots+1+i], 'rx', markersize=10)
             # plot trajectory
-            plt.plot(traj_data_plot[:,n_robots+i], traj_data_plot[:,n_robots+1+i], 'r.', color=p[0].get_color(), alpha=0.1)
-        plt.xlim([-1.5,0.25])
-        plt.ylim([-1.5,0.25])
+            plt.plot(traj_data_plot[:,n_robots+i], traj_data_plot[:,n_robots+1+i], 'r--', color=p[0].get_color(), alpha=0.5)
+            
+        # plt.xlim([-1.5,0.25])
+        # plt.ylim([-1.5,0.25])
         plt.legend(loc='best')
         plt.tight_layout()
         plt.savefig(f"results/{exp_name}/{env_name}_opt{np.argmax(c_to_rollout.numpy())}_rollout.png".format(k))
 
         # dynamics
-        if int(state_dim/2) > 2:
-            n_plots_x = np.sqrt(int(state_dim/2))
-            n_plots_y = n_plots_x
-        else:
-            n_plots_x = 2
-            n_plots_y = 1
-        plt.figure(figsize=[4*n_plots_x,2*n_plots_x])
+        n_plots_x = 4
+        n_plots_y = 2
+        plt.figure(figsize=[4*n_plots_x,3*n_plots_x])
         plt.suptitle('Fixed option - State debugging')
-        for i in range(int(state_dim/2)):
+        for i in range(n_robots+n_intruders):
             plt.subplot(n_plots_x,n_plots_y,i+1)
-            plt.plot(traj_data_plot[:,i], '--', color=p[0].get_color(), label='s{}_pred'.format(i))
-            plt.grid()
+            if i < n_robots:
+                label_id = f'R{i+1}'
+            else:
+                label_id = f'I{i-n_robots+1}'
+            plt.plot(traj_data_plot[:,0+i], 'b-', label='{}_X'.format(label_id))
+            plt.plot(traj_data_plot[:,1+i], 'r-', label='{}_Y'.format(label_id))
+            plt.legend()
         plt.savefig(f"results/{exp_name}/{env_name}_opt{np.argmax(c_to_rollout.numpy())}_rollout_time.png".format(k))
