@@ -112,16 +112,17 @@ elif env_name == 'PerimeterDef':
         plt.plot(traj_data[:,i+1], 'r-', label='y')
         plt.plot(traj_data_plot[:,i], 'b--', label='x_pred'.format(i))
         plt.plot(traj_data_plot[:,i+1], 'r--', label='y_pred'.format(i))
-        # plt.ylim([-0.003, 0.003])
+        # plt.ylim([-1.5, 0.0])
         # plt.xlim([0, 750])
         # remove internal ticks
         if i == 0:
             ax.xaxis.set_major_formatter(plt.NullFormatter())
         elif i==5 or i==6 or i==7:
-            ax.yaxis.set_major_formatter(plt.NullFormatter())
+            pass
+            # ax.yaxis.set_major_formatter(plt.NullFormatter())
         elif i !=4 :
             ax.xaxis.set_major_formatter(plt.NullFormatter())
-            ax.yaxis.set_major_formatter(plt.NullFormatter())
+            # ax.yaxis.set_major_formatter(plt.NullFormatter())
     # add common labels
     fig.text(0.5, 0.03, 'Time Steps', ha='center', va='center')
     fig.text(0.06, 0.5, 'Position (m)', ha='center', va='center', rotation='vertical')
@@ -148,7 +149,7 @@ if env_name == 'PerimeterDef':
 
 # plt.title('Evaluate Option Inference')
 fig, ax = plt.subplots(figsize=(7,4))
-ax.plot(true_segments_int,'D',alpha=0.5,label='Truth')
+ax.plot(true_segments_int,'D',alpha=0.5,label='Ground Truth')
 ax.plot(pred_segments, 'k.', label='PODNet')
 ax.yaxis.set_major_locator(MultipleLocator(1))
 plt.xlabel('Time Steps')

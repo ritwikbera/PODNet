@@ -195,27 +195,19 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
 
         # load dataset
         # dataset = np.genfromtxt('data/big_sample_robots.csv', delimiter=',')
-        dataset_list = [
-            'data/3_log.csv',
-            'data/5_log.csv',
-            'data/8_log.csv',
-            #'data/9_log.csv',
-            #'data/11_log.csv',
-            #'data/12_log.csv',
-            ]
-        item_counter = 0
-        for each_item in dataset_list:
-            print('Loading {} dataset.'.format(each_item))
-            dataset = np.genfromtxt(each_item, delimiter=',')
+        n_trajs = 2
+        for i in range(n_trajs):
+            file_name = f'robots/data/{i}_1dsf_log.csv'
+            print('Loading {} dataset.'.format(file_name))
+            dataset = np.genfromtxt(file_name, delimiter=',')
             new_traj_data, new_true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
-            if item_counter > 0:
+            if i > 0:
                 # using more then one datafile, stack to previous one
                 traj_data = np.vstack((traj_data, new_traj_data))
                 true_segments_int = np.vstack((true_segments_int, true_segments_int))
             else:
                 traj_data = new_traj_data
                 true_segments_int = new_true_segments_int
-            item_counter += 1
         traj_length = traj_data.shape[0]
         print('[*] Using {} robot data points.'.format(traj_length))
         
@@ -352,7 +344,7 @@ if __name__ == '__main__':
     # -----------------------------------------------
     # Experiment hyperparameters
     EVAL_MODEL = True
-    epochs = 150
+    epochs = 50
     hard = False 
     use_recurrent = False
 
@@ -361,7 +353,7 @@ if __name__ == '__main__':
     # exp_name = 'circle'
     # env_name = 'CircleWorld'
 
-    exp_name = '3_stacked_robot'
+    exp_name = '180_trajs_1dsf'
     env_name = 'PerimeterDef'
 
     os.makedirs("results", exist_ok=True)
