@@ -69,7 +69,7 @@ if env_name == 'CircleWorld':
 elif env_name == 'PerimeterDef':
     # load dataset
     if eval_file == None:
-        eval_file_addr = 'data/3_log.csv'
+        eval_file_addr = 'data/198_1dsf_log.csv'
     else:
         eval_file_adrr = eval_file
     dataset = np.genfromtxt(eval_file_adrr, delimiter=',')

@@ -141,7 +141,7 @@ class PODNet(nn.Module):
         return L_BC, L_ODC, beta*KLD
 
 
-def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
+def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent, n_trajs):
     # if available, use single GPU to train PODNet
     if torch.cuda.is_available():  
         device = torch.device("cuda:0")
@@ -151,6 +151,7 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
     # GPU not working for recurrent case
     if use_recurrent:
         device = torch.device("cpu")
+    print(f'[*] INFO: Using {device} device.')
 
     # parse env parameters
     if env_name == 'CircleWorld':
@@ -193,37 +194,6 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
         learning_rate = 1e-4
         mlp_hidden = 32
 
-        # load dataset
-        # dataset = np.genfromtxt('data/big_sample_robots.csv', delimiter=',')
-        n_trajs = 2
-        for i in range(n_trajs):
-            file_name = f'robots/data/{i}_1dsf_log.csv'
-            print('Loading {} dataset.'.format(file_name))
-            dataset = np.genfromtxt(file_name, delimiter=',')
-            new_traj_data, new_true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
-            if i > 0:
-                # using more then one datafile, stack to previous one
-                traj_data = np.vstack((traj_data, new_traj_data))
-                true_segments_int = np.vstack((true_segments_int, true_segments_int))
-            else:
-                traj_data = new_traj_data
-                true_segments_int = new_true_segments_int
-        traj_length = traj_data.shape[0]
-        print('[*] Using {} robot data points.'.format(traj_length))
-        
-        # normalize states and actions and convert to pytorch format
-        traj_data, traj_data_mean, traj_data_std = normalize(traj_data)
-        traj_data = torch.Tensor(np.expand_dims(traj_data, axis=1))
-
-        # convert trajectory segments to pytorch format after one-hot encoding
-        true_segments = torch.from_numpy(to_categorical(true_segments_int))
-        c_initial = torch.Tensor([[1,0,0,0]])
-
-    # send data to current device (CPU or GPU)
-    traj_data = traj_data.to(device)
-    true_segments = true_segments.to(device)
-    c_initial = c_initial.to(device)
-
     # create PODNet
     model = PODNet(
         state_dim=state_dim,
@@ -246,47 +216,70 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
     for epoch in range(1, epochs + 1):
         # --------------------------------------------------------------------
         # TRAIN
+        print(f'*** EPOCH {epoch}/{epochs}. Using {n_trajs} trajectories ***')
         start_epoch = time.time()
 
         # store current temperature value
         current_temp = temp
 
         # initialize variables and create arrays to store plotting data
-        c_prev = c_initial
         i = 0
         train_loss, L_BC_epoch, L_ODC_epoch, Reg_epoch, L_TSR_epoch = 0, 0, 0, 0, 0
 
-        # loops until traj_length-1 because we need to use the next state as true_next_state
-        for k in range(traj_length-1):
-            data = traj_data[k]
-            state, action = data[:,:state_dim], data[:,state_dim:]
-            i += 1
+        # load it trajectory separetely. otherwise it won't fit on memory
+        for j in range(n_trajs):
+            if env_name == 'PerimeterDef':
+                # load dataset
+                file_name = f'robots/data/{j}_1dsf_log.csv'
+                dataset = np.genfromtxt(file_name, delimiter=',')
+                traj_data, true_segments_int = dataset[:,:state_dim+action_dim], dataset[:,-1]
+                traj_length = traj_data.shape[0]
+                print('Loading {} dataset. {} robot data points.'.format(file_name, traj_length))
+                
+                # normalize states and actions and convert to pytorch format
+                traj_data, traj_data_mean, traj_data_std = normalize(traj_data)
+                traj_data = torch.Tensor(np.expand_dims(traj_data, axis=1))
 
-            optimizer.zero_grad()
+                # convert trajectory segments to pytorch format after one-hot encoding
+                true_segments = torch.from_numpy(to_categorical(true_segments_int))
+                c_initial = torch.Tensor([[1,0,0,0]])
 
-            # predict next actions, states, and options
-            action_pred, next_state_pred, c_t = model(state,c_prev,current_temp,hard)
-            true_next_state = traj_data[k+1][:,:int(state_dim/2)]
+            # send data to current device (CPU or GPU)
+            traj_data = traj_data.to(device)
+            true_segments = true_segments.to(device)
+            c_prev = c_initial.to(device)
 
-            #loss = loss_function(next_state_pred, state, action_pred, action, c_t)
-            L_BC, L_ODC, Reg = model.loss_function(next_state_pred,true_next_state,action_pred,action,c_t)
-            L_TSR = 0
-            # L_TSR = 1-torch.dot(c_t_stored[i].squeeze(),c_t_stored[i-1].squeeze())
+            # loops until traj_length-1 because we need to use the next state as true_next_state
+            for k in range(traj_length-1):
+                data = traj_data[k]
+                state, action = data[:,:state_dim], data[:,state_dim:]
+                i += 1
 
-            # save predicted c_t to use as previous c_t on next iteration
-            #c_prev = c_t.detach()
-            c_prev = Variable(c_t.data.clone(), requires_grad=False)
+                optimizer.zero_grad()
 
-            # Propagates gradients after every data sample
-            L_BC_epoch += L_BC.item()
-            L_ODC_epoch += L_ODC.item()
-            Reg_epoch += Reg.item()
-            L_TSR_epoch += 0#L_TSR.item()
+                # predict next actions, states, and options
+                action_pred, next_state_pred, c_t = model(state,c_prev,current_temp,hard)
+                true_next_state = traj_data[k+1][:,:int(state_dim/2)]
 
-            loss = L_BC + L_ODC + Reg + L_TSR
-            loss.backward(retain_graph=False)
-            train_loss += loss.item()
-            optimizer.step()
+                #loss = loss_function(next_state_pred, state, action_pred, action, c_t)
+                L_BC, L_ODC, Reg = model.loss_function(next_state_pred,true_next_state,action_pred,action,c_t)
+                L_TSR = 0
+                # L_TSR = 1-torch.dot(c_t_stored[i].squeeze(),c_t_stored[i-1].squeeze())
+
+                # save predicted c_t to use as previous c_t on next iteration
+                #c_prev = c_t.detach()
+                c_prev = Variable(c_t.data.clone(), requires_grad=False)
+
+                # Propagates gradients after every data sample
+                L_BC_epoch += L_BC.item()
+                L_ODC_epoch += L_ODC.item()
+                Reg_epoch += Reg.item()
+                L_TSR_epoch += 0#L_TSR.item()
+
+                loss = L_BC + L_ODC + Reg + L_TSR
+                loss.backward(retain_graph=False)
+                train_loss += loss.item()
+                optimizer.step()
 
         # update temperature value
         temp = np.maximum(temp * np.exp(-ANNEAL_RATE*epoch), temp_min)
@@ -331,7 +324,7 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent):
     # evaluate model
     if EVAL_MODEL:
         print('[*] Running trained model on evaluation data.')
-        os.system(f"python eval_podnet.py results/{exp_name}/{env_name}_trained.pt")
+        os.system(f"python eval_podnet.py results/{exp_name}/{env_name}_trained.pt robots/data/198_1dsf_log.csv")
 
 
 if __name__ == '__main__':
@@ -352,12 +345,14 @@ if __name__ == '__main__':
     # Environment
     # exp_name = 'circle'
     # env_name = 'CircleWorld'
+    # n_trajs = 1
 
     exp_name = '180_trajs_1dsf'
     env_name = 'PerimeterDef'
+    n_trajs = 180
 
     os.makedirs("results", exist_ok=True)
     os.makedirs(f"results/{exp_name}", exist_ok=True)
 
     # train PODNet
-    run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent)
+    run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent, n_trajs)
