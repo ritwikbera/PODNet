@@ -296,30 +296,23 @@ def run(EVAL_MODEL, epochs, hard, exp_name, env_name, use_recurrent, n_trajs):
         # store loss values
         loss_plot[epoch-1] = epoch, train_loss/i, L_BC_epoch/i, L_ODC_epoch/i, Reg_epoch/i, current_temp, L_TSR_epoch/i
 
-        # save latest model checkpoint
+        # save last trained model
         torch.save({
-            'epoch': epoch,
+            'env_name': env_name,
+            'exp_name': exp_name,
+            'temp_min': temp_min,
+            'hard': hard,
+            'state_dim': state_dim,
+            'action_dim': action_dim,
+            'categorical_dim': categorical_dim,
+            'latent_dim': latent_dim,
+            'c_initial': c_initial,
+            'loss_plot': loss_plot,
+            'use_recurrent': use_recurrent,
             'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            }, f'results/{exp_name}/{env_name}_checkpoint.tar')
+        }, f'results/{exp_name}/{env_name}_ep{epoch}_trained.pt')
 
     print('[*] Total training time: {:.2f} minutes'.format((time.time()-start_train)/60))
-
-    # save final trained model
-    torch.save({
-        'env_name': env_name,
-        'exp_name': exp_name,
-        'temp_min': temp_min,
-        'hard': hard,
-        'state_dim': state_dim,
-        'action_dim': action_dim,
-        'categorical_dim': categorical_dim,
-        'latent_dim': latent_dim,
-        'c_initial': c_initial,
-        'loss_plot': loss_plot,
-        'use_recurrent': use_recurrent,
-        'model_state_dict': model.state_dict(),
-     }, f'results/{exp_name}/{env_name}_trained.pt')
 
     # evaluate model
     if EVAL_MODEL:
