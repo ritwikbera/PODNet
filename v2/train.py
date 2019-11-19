@@ -5,8 +5,11 @@ import numpy as np
 import time 
 import argparse
 import pandas as pd 
+import glob
 
 from netv2 import *
+
+path = 'data/*'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', default=10, type=int)
@@ -23,17 +26,36 @@ action_dim = 2
 latent_dim = 1
 categorical_dim = 3
 
-SEGMENT_SIZE = 256
+SEGMENT_SIZE = 512
 TRAJ_BATCH_SIZE = 1
 MAX_LENGTH = SEGMENT_SIZE*4  #set any integer multiple of SEGMENT_SIZE
-BATCH_SIZE = TRAJ_BATCH_SIZE*MAX_LENGTH // SEGMENT_SIZE 
+
 num_trajectories = 1
-num_batches = num_trajectories/TRAJ_BATCH_SIZE
+num_batches = num_trajectories//TRAJ_BATCH_SIZE + 1
+
+
+def load_trajectory_batch(path, traj_batch_index, traj_batch_size):
     
+    if traj_batch_index == num_batches-1:
+        files = glob.glob(path)[traj_batch_index*traj_batch_size:]
+    else:
+        files = glob.glob(path)[ \
+            traj_batch_index*traj_batch_size:(traj_batch_index+1)*traj_batch_size]
+    
+    trajectories = []
+    for file in files:
+        traj_file = pd.read_csv(file)
+        trajectory = np.array([traj_file['x_t'], traj_file['y_t']]).T
+        trajectories.append(Tensor(trajectory))
+
+    return trajectories
+
 def load_segment_batch(i):
 
-    # trajectories is a python list of variable length tensors (trajectories)
-    traj_batch = trajectories[TRAJ_BATCH_SIZE*i:TRAJ_BATCH_SIZE*(i+1)]
+    traj_batch = load_trajectory_batch(
+        path=path, 
+        traj_batch_index=i,
+        traj_batch_size=TRAJ_BATCH_SIZE)
 
     traj = Tensor([PAD_TOKEN]).repeat(TRAJ_BATCH_SIZE, MAX_LENGTH, STATE_DIM)
     traj_ns = traj
@@ -74,13 +96,14 @@ def train(device):
 
     if args.dummy_test:
         num_batches = 1
-        BATCH_SIZE = 1
-        cur_state_segment = torch.ones(BATCH_SIZE, SEGMENT_SIZE, STATE_DIM)
-        next_state_segment = torch.ones(BATCH_SIZE, SEGMENT_SIZE, STATE_DIM)
+        SEGMENT_BATCH_SIZE = 1
+        cur_state_segment = torch.ones(SEGMENT_BATCH_SIZE, SEGMENT_SIZE, STATE_DIM)
+        next_state_segment = torch.ones(SEGMENT_BATCH_SIZE, SEGMENT_SIZE, STATE_DIM)
 
     for i in range(args.epochs):
         for j in range(num_batches):
-            #cur_state_segment, next_state_segment = load_segment_batch(j)
+            if not args.dummy_test:
+                cur_state_segment, next_state_segment = load_segment_batch(j)
             train_step(cur_state_segment, next_state_segment)
 
 
