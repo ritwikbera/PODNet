@@ -3,8 +3,17 @@ from torch import Tensor, nn, optim
 import torch.nn.functional as F 
 import numpy as np 
 import time 
+import argparse
 
 from netv2 import *
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--epochs', default=10, type=int)
+parser.add_argument('--dummy_test', default=True, type=bool)
+parser.add_argument('--lr', default=1e-3, type=float)
+args = parser.parse_args()
+
+torch.manual_seed(100)
 
 PAD_TOKEN = 0
 SEGMENT_SIZE = 128
@@ -18,10 +27,10 @@ categorical_dim = 3
 max_length = 6000
 num_segments = max_length // SEGMENT_SIZE + 1
 
-#dummy training data
-num_segments = 1
-cur_state_segment = torch.randn(BATCH_SIZE, SEGMENT_SIZE, STATE_DIM)
-next_state_segment = torch.randn(BATCH_SIZE, SEGMENT_SIZE, STATE_DIM)
+if args.dummy_test:
+    num_segments = 1
+    cur_state_segment = torch.ones(BATCH_SIZE, SEGMENT_SIZE, STATE_DIM)
+    next_state_segment = torch.ones(BATCH_SIZE, SEGMENT_SIZE, STATE_DIM)
 
 model = PODNet(
     state_dim=STATE_DIM, 
@@ -29,9 +38,7 @@ model = PODNet(
     latent_dim=latent_dim, 
     categorical_dim=categorical_dim)
 
-learning_rate = 1e-4
-epochs = 1
-optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
 def train(cur_state_segment, next_state_segment):
     next_state_pred, c_t = model(cur_state_segment)
@@ -44,7 +51,7 @@ def train(cur_state_segment, next_state_segment):
     loss.backward()
     optimizer.step()
 
-for i in range(epochs):
+for i in range(args.epochs):
     for j in range(num_segments):
         train(cur_state_segment, next_state_segment)
 
