@@ -5,8 +5,6 @@ import numpy as np
 import time 
 
 from netv2 import *
-from layers import *
-from gumbel import * 
 
 PAD_TOKEN = 0
 SEGMENT_SIZE = 128
@@ -17,10 +15,23 @@ action_dim = 2
 latent_dim = 1
 categorical_dim = 3
 
+max_length = 6000
+num_segments = max_length // SEGMENT_SIZE + 1
+
+#dummy training data
+num_segments = 1
 cur_state_segment = torch.randn(BATCH_SIZE, SEGMENT_SIZE, STATE_DIM)
 next_state_segment = torch.randn(BATCH_SIZE, SEGMENT_SIZE, STATE_DIM)
 
-model = PODNet(STATE_DIM, action_dim, latent_dim, categorical_dim)
+model = PODNet(
+    state_dim=STATE_DIM, 
+    action_dim=action_dim, 
+    latent_dim=latent_dim, 
+    categorical_dim=categorical_dim)
+
+learning_rate = 1e-4
+epochs = 1
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 def train(cur_state_segment, next_state_segment):
     next_state_pred, c_t = model(cur_state_segment)
@@ -29,8 +40,12 @@ def train(cur_state_segment, next_state_segment):
     
     print('Loss shape (should be scalar) :{}'.format(loss.size()))
     print(loss)
-    #loss.backward()
-    #optim.step()
 
-train(cur_state_segment, next_state_segment)
+    loss.backward()
+    optimizer.step()
+
+for i in range(epochs):
+    for j in range(num_segments):
+        train(cur_state_segment, next_state_segment)
+
 #if __name__ =='__main__':
