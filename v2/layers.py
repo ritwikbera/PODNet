@@ -5,36 +5,35 @@ from torch.autograd import Variable
 import math
 import numpy as np 
 
-SEGMENT_SIZE = 128
-BATCH_SIZE = 1
-INPUT_SIZE = 2 #2d state test
-
-class PositionalEncoder(nn.Module):
-    def __init__(self, input_dim, max_seq_len = SEGMENT_SIZE):
+class FeedForward(nn.Module):
+    def __init__(self, input_dim, output_dim, mlp_hidden=32, dropout = 0.1):
         super().__init__()
-        self.input_dim = input_dim
-        pe = torch.zeros(max_seq_len, input_dim)
-        for pos in range(max_seq_len):
-            for i in range(0, input_dim, 2):
-                pe[pos, i] = \
-                math.sin(pos / (10000 ** ((2 * i)/input_dim)))
-                pe[pos, i + 1] = \
-                math.cos(pos / (10000 ** ((2 * (i + 1))/input_dim)))
-                
-        pe = pe.unsqueeze(0)
-        self.register_buffer('pe', pe)
- 
+        self.linear_1 = nn.Linear(input_dim, mlp_hidden)
+        self.dropout = nn.Dropout(dropout)
+        self.linear_2 = nn.Linear(mlp_hidden, mlp_hidden)
+        self.linear_3 = nn.Linear(mlp_hidden, output_dim)
+    
     def forward(self, x):
-        # make embeddings relatively larger
-        x = x * math.sqrt(self.input_dim)
-        #add constant to embedding
-        seq_len = x.size(1)
-        x = x + Variable(self.pe[:,:seq_len],requires_grad=False)
+        x = self.dropout(F.relu(self.linear_1(x)))
+        x = self.dropout(F.relu(self.linear_2(x)))
+        x = self.linear_3(x)
         return x
 
+class PositionalEncoder(nn.Module):
+    def __init__(self, max_seq_len):
+        super().__init__()
+        pe = torch.zeros(max_seq_len, 1)
+
+        for pos in range(max_seq_len):
+            pe[pos,:] = math.sin((pos/5000)*math.pi/2)
+
+        self.register_buffer('pe', pe.unsqueeze(0))
+ 
+    def forward(self, x):
+        return torch.cat((x, self.pe.repeat(x.size(0),1,1)), dim=-1)
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, input_dim, output_dim, att_dim=5, heads=1):
+    def __init__(self, input_dim, output_dim, att_dim=6, heads=1):
         super().__init__()
         self.input_dim = input_dim
         self.att_dim = att_dim
@@ -80,9 +79,18 @@ class MultiHeadAttention(nn.Module):
         return output
 
 if __name__=='__main__':
-    a = torch.arange(SEGMENT_SIZE)
-    mask = (a[None, :] <= a[:, None]).type(torch.FloatTensor)
-    mhatt = MultiHeadAttention(2,3)
-    x = torch.randn(BATCH_SIZE, SEGMENT_SIZE, INPUT_SIZE)
-    out = mhatt(x,x,x, mask)
-    print('MHAtt Output Size {}'.format(out.size()))
+    # BATCH_SIZE = 1
+    # SEGMENT_SIZE = 512
+    # a = torch.arange(SEGMENT_SIZE)
+    # mask = (a[None, :] <= a[:, None]).type(torch.FloatTensor)
+    # mhatt = MultiHeadAttention(2,3)
+    # x = torch.randn(BATCH_SIZE, SEGMENT_SIZE, INPUT_SIZE)
+    # out = mhatt(x,x,x, mask)
+    # print('MHAtt Output Size {}'.format(out.size()))
+
+    pos_enc = PositionalEncoder(512)
+    x = torch.zeros(3,512,2)
+    print(pos_enc(x).size())
+    print(pos_enc(x)[:,:10])
+    print('Last 10')
+    print(pos_enc(x)[:,-10:])

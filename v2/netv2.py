@@ -13,12 +13,15 @@ class OptionEncoder(nn.Module):
         self.state_dim = state_dim
         self.latent_dim = latent_dim
         self.categorical_dim = categorical_dim
-        self.mhatt = MultiHeadAttention(state_dim, latent_dim*categorical_dim)
+        self.pos_enc = PositionalEncoder(512) #initialize with segment size
+        self.mhatt = MultiHeadAttention(state_dim+1, latent_dim*categorical_dim)
+        self.ffn = FeedForward(latent_dim*categorical_dim, latent_dim*categorical_dim)
 
     def forward(self, s_t):
         a = torch.arange(s_t.size()[1])
         mask = (a[None, :] <= a[:, None]).type(torch.FloatTensor)
-        return self.mhatt(s_t, s_t, s_t, mask)
+        s_t = self.pos_enc(s_t)
+        return self.ffn(self.mhatt(s_t, s_t, s_t, mask))
         
 class OptionDynamics(nn.Module):
     def __init__(self, state_dim, categorical_dim, latent_dim=1, use_dropout=True, mlp_hidden=32):
@@ -63,7 +66,7 @@ class PODNet(nn.Module):
         return next_state_pred, c_t
 
 if __name__=='__main__':
-    SEGMENT_SIZE = 128
+    SEGMENT_SIZE = 512
     BATCH_SIZE = 1
     state_dim = 2
     action_dim = 2

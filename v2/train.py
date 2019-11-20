@@ -6,6 +6,7 @@ import time
 import argparse
 import pandas as pd 
 import glob
+import math
 
 from netv2 import *
 
@@ -13,7 +14,7 @@ path = 'data/*'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', default=10, type=int)
-parser.add_argument('--dummy_test', default=True, type=bool)
+parser.add_argument('--dummy_test', default=False, type=bool)
 parser.add_argument('--lr', default=1e-3, type=float)
 args = parser.parse_args()
 
@@ -31,7 +32,7 @@ TRAJ_BATCH_SIZE = 1
 MAX_LENGTH = SEGMENT_SIZE*4  #set any integer multiple of SEGMENT_SIZE
 
 num_trajectories = 1
-num_batches = num_trajectories//TRAJ_BATCH_SIZE + 1
+num_batches = math.ceil(num_trajectories/TRAJ_BATCH_SIZE)
 
 
 def load_trajectory_batch(path, traj_batch_index, traj_batch_size):
@@ -92,6 +93,9 @@ def train_step(cur_state_segment, next_state_segment):
     optimizer.step()
 
 def train(device):
+
+    global num_batches
+
     print('On device: {}'.format(device))
 
     if args.dummy_test:
