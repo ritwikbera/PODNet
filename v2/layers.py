@@ -30,10 +30,10 @@ class PositionalEncoder(nn.Module):
         self.register_buffer('pe', pe.unsqueeze(0))
  
     def forward(self, x):
-        return torch.cat((x, self.pe.repeat(x.size(0),1,1)), dim=-1)
+        return torch.cat((x, self.pe.repeat(*x.size()[:-2],1,1)), dim=-1)
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, input_dim, output_dim, att_dim=6, heads=1):
+    def __init__(self, input_dim, output_dim, att_dim=12, heads=2):
         super().__init__()
         self.input_dim = input_dim
         self.att_dim = att_dim
@@ -54,6 +54,7 @@ class MultiHeadAttention(nn.Module):
         # print('Value matrix size {}'.format(v.size()))
 
         if mask is not None:
+            mask = mask.repeat(*mask.size()[:-2],1,1)
             logits = logits.masked_fill(mask == 0, -1e9)
             probs = F.softmax(logits, dim=-1)
 

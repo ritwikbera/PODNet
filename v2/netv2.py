@@ -8,23 +8,23 @@ from gumbel import *
 from layers import *
 
 class OptionEncoder(nn.Module):
-    def __init__(self, state_dim, categorical_dim, latent_dim=1, use_dropout=False, mlp_hidden=32):
+    def __init__(self, state_dim, latent_dim, categorical_dim, SEGMENT_SIZE, NUM_HEADS, use_dropout=False):
         super(OptionEncoder, self).__init__()
         self.state_dim = state_dim
         self.latent_dim = latent_dim
         self.categorical_dim = categorical_dim
-        self.pos_enc = PositionalEncoder(512) #initialize with segment size
-        self.mhatt = MultiHeadAttention(state_dim+1, latent_dim*categorical_dim)
+        self.pos_enc = PositionalEncoder(SEGMENT_SIZE) #initialize with segment size
+        self.mhatt = MultiHeadAttention(state_dim+1, latent_dim*categorical_dim, heads=NUM_HEADS)
         self.ffn = FeedForward(latent_dim*categorical_dim, latent_dim*categorical_dim)
 
     def forward(self, s_t):
-        a = torch.arange(s_t.size()[1])
+        a = torch.arange(s_t.size()[-2])
         mask = (a[None, :] <= a[:, None]).type(torch.FloatTensor)
         s_t = self.pos_enc(s_t)
         return self.ffn(self.mhatt(s_t, s_t, s_t, mask))
         
 class OptionDynamics(nn.Module):
-    def __init__(self, state_dim, categorical_dim, latent_dim=1, use_dropout=True, mlp_hidden=32):
+    def __init__(self, state_dim, latent_dim, categorical_dim, use_dropout=True, mlp_hidden=32):
         super(OptionDynamics, self).__init__()
         self.state_dim = state_dim
         self.latent_dim = latent_dim
@@ -48,15 +48,15 @@ class OptionDynamics(nn.Module):
         return self.fc3(h2)
 
 class PODNet(nn.Module):
-    def __init__(self, state_dim, action_dim, latent_dim, categorical_dim, temperature=0.1):
+    def __init__(self, state_dim, action_dim, latent_dim, categorical_dim, SEGMENT_SIZE=512, NUM_HEADS=2, temperature=0.1):
         super(PODNet, self).__init__()
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.latent_dim = latent_dim
         self.categorical_dim = categorical_dim
         self.temperature = temperature
-        self.infer_option = OptionEncoder(state_dim, categorical_dim, latent_dim=latent_dim)
-        self.decode_next_state = OptionDynamics(state_dim, categorical_dim, latent_dim=latent_dim)
+        self.infer_option = OptionEncoder(state_dim, latent_dim, categorical_dim, SEGMENT_SIZE=SEGMENT_SIZE, NUM_HEADS=NUM_HEADS)
+        self.decode_next_state = OptionDynamics(state_dim, latent_dim, categorical_dim)
 
     def forward(self, s_t):
         c_t_logits = self.infer_option(s_t)
