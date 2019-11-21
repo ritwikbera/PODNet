@@ -24,7 +24,7 @@ torch.manual_seed(100)
 STATE_DIM = 2
 action_dim = 2
 latent_dim = 1
-categorical_dim = 3
+categorical_dim = 2
 NUM_HEADS = 2
 
 PAD_TOKEN = 0
@@ -55,18 +55,32 @@ dataloader = DataLoader(robo_dataset, **params)
 for i, (states, true_next_states) in enumerate(dataloader):
     states = states.view(-1, SEGMENT_SIZE, STATE_DIM)
     next_state_pred, c_t = model(states)
-    
+
+# ---------------------------------------------------------------------------- 
 # plot
 os.makedirs('plots', exist_ok=True)
+
+# dynamics
 next_state_pred = next_state_pred.detach().numpy()
 plt.figure()
 plt.plot(true_next_states[0, 0,:,0], 'b-', label='Truth')
 plt.plot(true_next_states[0, 0,:,1], 'r-')
 plt.plot(next_state_pred[0,:,0], 'b--', label='Predicted')
 plt.plot(next_state_pred[0,:,1], 'r--')
-plt.xlabel('Time Steps')
+plt.xlabel('Time Step')
 plt.ylabel('Position')
 plt.legend()
 plt.tight_layout()
 plt.savefig('plots/dynamics.png', dpi=300)
+
+# options
+c_t = c_t.detach().numpy()
+plt.figure()
+plt.plot(np.argmax(c_t[0,:,:], axis=1), 'k.', label='Predicted')
+plt.xlabel('Time Step')
+plt.ylabel('Option')
+plt.legend()
+plt.tight_layout()
+plt.savefig('plots/options.png', dpi=300)
+
 plt.show()

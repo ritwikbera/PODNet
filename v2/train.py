@@ -33,7 +33,7 @@ device = 'cuda:0' if args.use_cuda and torch.cuda.is_available() else 'cpu'
 STATE_DIM = 2
 action_dim = 2
 latent_dim = 1
-categorical_dim = 3
+categorical_dim = 2
 NUM_HEADS = 2
 
 PAD_TOKEN = 0
