@@ -5,12 +5,12 @@ def sample_gumbel(shape, eps=1e-20):
     U = torch.rand(shape)
     return -torch.log(-torch.log(U + eps) + eps)
 
-def gumbel_softmax_sample(logits, temperature):
-    y = logits + sample_gumbel(logits.size())
+def gumbel_softmax_sample(logits, temperature, device):
+    y = logits + sample_gumbel(logits.size()).to(device)
     return F.softmax(y / temperature, dim=-1)
 
-def gumbel_softmax(logits, latent_dim, categorical_dim, temperature=0.1, hard=False):
-    y = gumbel_softmax_sample(logits, temperature)
+def gumbel_softmax(logits, latent_dim, categorical_dim, temperature=0.1, hard=False, device='cpu'):
+    y = gumbel_softmax_sample(logits, temperature, device)
     
     if not hard:
         return y.view(*y.size()[:-2], latent_dim * categorical_dim)

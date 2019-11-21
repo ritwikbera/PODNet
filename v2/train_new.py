@@ -76,15 +76,16 @@ model = PODNet(
     latent_dim=latent_dim, 
     categorical_dim=categorical_dim,
     SEGMENT_SIZE=SEGMENT_SIZE,
-    NUM_HEADS=NUM_HEADS).to(device)
+    NUM_HEADS=NUM_HEADS,
+    device=device).to(device)
 
 
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-def train_step(cur_state_segment, next_state_segment):
+def train_step(cur_state_segment, next_state_segment, device):
     optimizer.zero_grad()
     next_state_pred, c_t = model(cur_state_segment)
-    mask = (next_state_segment!=PAD_TOKEN).type(torch.FloatTensor)
+    mask = (next_state_segment!=PAD_TOKEN).type(torch.FloatTensor).to(device)
     loss = (((next_state_segment - next_state_pred)**2)*mask).sum(-1).sum(-2).mean()
     
     # print('Loss shape (should be scalar) :{}'.format(loss.size()))
@@ -118,7 +119,7 @@ def train(device):
             #print('States size {}'.format(states.size()))
             #print('True_Next_States size {}'.format(true_next_states.size()))
             
-            loss += train_step(states, true_next_states)
+            loss += train_step(states, true_next_states, device)
 
         if epoch == 0:
             smooth_loss = loss
