@@ -93,7 +93,16 @@ def train_step(cur_state_segment, next_state_segment):
 
     return loss
 
+best_model, optimizer_state = model.state_dict(), optimizer.state_dict()
+
+def save(filename, model_state = model.state_dict(), optimizer_state = optimizer.state_dict()):
+    torch.save({'model_state_dict': model_state,
+            'optimizer_state_dict': optimizer_state}, filename)
+
 def train(device):
+    smooth_loss = 0
+    smooth_coeff = 0.5
+    min_loss = 0
 
     print('On device: {}'.format(device))
 
@@ -109,6 +118,24 @@ def train(device):
             
             loss += train_step(states, true_next_states)
 
-        print('Epoch: {} Loss: {}'.format(epoch, loss))
+        if epoch == 0:
+            smooth_loss = loss
+            min_loss = loss
+            best_model, optimizer_state = model.state_dict(), optimizer.state_dict()
+        else :
+            smooth_loss = smooth_coeff*smooth_loss + (1-smooth_coeff)*loss
+            if loss < min_loss:
+                best_model, optimizer_state = model.state_dict(), optimizer.state_dict()
 
-train(torch.device('cpu'))
+        print('Epoch: {} Loss: {}'.format(epoch, loss))
+        print('Epoch: {} Smoothed Loss: {}'.format(epoch, smooth_loss))
+
+    print('Training complete, saving best model so far .....')
+    save('checkpoint.pth', model_state=best_model, optimizer_state=optimizer_state)
+
+try:
+    train(torch.device('cpu')) 
+except KeyboardInterrupt:
+    print('Interrupted, saving best model so far.....')
+    save('checkpoint.pth', model_state=best_model, optimizer_state=optimizer_state)
+    
