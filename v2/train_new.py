@@ -16,9 +16,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', default=10, type=int)
 parser.add_argument('--dummy_test', default=False, type=bool)
 parser.add_argument('--lr', default=1e-3, type=float)
+parser.add_argument('--use_cuda', default=True, type=bool)
 args = parser.parse_args()
 
 torch.manual_seed(100)
+device = 'cuda:0' if args.use_cuda and torch.cuda.is_available() else 'cpu'
 
 STATE_DIM = 2
 action_dim = 2
@@ -74,7 +76,7 @@ model = PODNet(
     latent_dim=latent_dim, 
     categorical_dim=categorical_dim,
     SEGMENT_SIZE=SEGMENT_SIZE,
-    NUM_HEADS=NUM_HEADS)
+    NUM_HEADS=NUM_HEADS).to(device)
 
 
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -110,8 +112,8 @@ def train(device):
         loss = 0
         for i, (states, true_next_states) in enumerate(dataloader):
             
-            states = states.view(-1, SEGMENT_SIZE, STATE_DIM)
-            true_next_states = true_next_states.view(-1, SEGMENT_SIZE, STATE_DIM)
+            states = states.view(-1, SEGMENT_SIZE, STATE_DIM).to(device)
+            true_next_states = true_next_states.view(-1, SEGMENT_SIZE, STATE_DIM).to(device)
             #print('Index: {}'.format(i))
             #print('States size {}'.format(states.size()))
             #print('True_Next_States size {}'.format(true_next_states.size()))
@@ -134,7 +136,7 @@ def train(device):
     save('checkpoint.pth', model_state=best_model, optimizer_state=optimizer_state)
 
 try:
-    train(torch.device('cpu')) 
+    train(device) 
 except KeyboardInterrupt:
     print('Interrupted, saving best model so far.....')
     save('checkpoint.pth', model_state=best_model, optimizer_state=optimizer_state)
