@@ -22,18 +22,7 @@ Activate the new environment and install dependencies:
 ```pip install -r requirements.txt```
 
 # Instructions
-- Run ```python podnet.py```.
-
-## Collect human trajectories
-
-Run ```python collect_trajs.py``` and close environment window when finished collecting data. 
-Default actions are:
-- Left arrow: turns left  
-- Right arrow: turns right  
-- Up arrow: moves forward  
-
-Data as saved as csv file in the data folder. Each row corresponds to a data sample and columns represent episode number, 
-time step number of the current episode, action taken, and the rest are the observations stored as a flat array.
+- In the **v2** folder, run ```python train.py --epochs 300``` to train and ```python eval.py``` to evaluate. Right now hardcode to work only with CircleWorld data for debugging purposes. Please check **v1** for previous, more general and not parallelized, model. 
 
 # Citation
 
