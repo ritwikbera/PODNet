@@ -24,6 +24,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', default=10, type=int)
 parser.add_argument('--dummy_test', default=False, type=bool)
 parser.add_argument('--lr', default=1e-3, type=float)
+parser.add_argument('--K', default=2, type=int)
 parser.add_argument('--use_cuda', default=True, type=bool)
 args = parser.parse_args()
 
@@ -33,7 +34,7 @@ device = 'cuda:0' if args.use_cuda and torch.cuda.is_available() else 'cpu'
 STATE_DIM = 2
 action_dim = 2
 latent_dim = 1
-categorical_dim = 2
+categorical_dim = args.K
 NUM_HEADS = 2
 
 PAD_TOKEN = 0
