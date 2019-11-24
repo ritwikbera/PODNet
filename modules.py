@@ -25,23 +25,30 @@ class OptionEncoder_Recurrent(nn.Module):
         
         self.c_t = torch.eye(categorical_dim)[0].repeat(batch_size,1,latent_dim)
 
-    def forward(self, state, temp = 0.1):
-        state = state.view(state.size(0),1,state.size(-1))
-        lstm_in = torch.cat((state, self.c_t.detach()), dim=-1)
-        lstm_out, self.hidden_cell = self.lstm(lstm_in, 
-            (self.hidden_cell[0].detach(), self.hidden_cell[1].detach()))
+    def forward(self, states, temp = 0.1):
+        steps = states.size(1)
+        c_stored = self.c_t
+        for i in range(steps):
+            state = states[:,i]
+
+            state = state.view(state.size(0),1,state.size(-1))
+            lstm_in = torch.cat((state, self.c_t.detach()), dim=-1)
+            lstm_out, self.hidden_cell = self.lstm(lstm_in, 
+                (self.hidden_cell[0].detach(), self.hidden_cell[1].detach()))
+            
+            q = self.linear(lstm_out.view(*state.size()[:-1], -1))
+
+            q_y = q.view(*q.size()[:-1], self.latent_dim, self.categorical_dim)
+            self.c_t = F.gumbel_softmax(q_y, tau=temp, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
+
+            c_stored = torch.cat((c_stored, self.c_t), dim = 1)
         
-        q = self.linear(lstm_out.view(*state.size()[:-1], -1))
-
-        q_y = q.view(*q.size()[:-1], self.latent_dim, self.categorical_dim)
-        self.c_t = F.gumbel_softmax(q_y, tau=temp, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
-
-        return self.c_t.squeeze(1)
+        return c_stored[:,1:]  #return inferred options for the entire new segment
 
 if __name__ == '__main__':
     states = torch.randn(4,10,2)
     enc = OptionEncoder_Recurrent(states.size(0),states.size(-1))
     enc.init_states()
     enc.eval()
-    options = enc(states[:,0])
+    options = enc(states)
     print('Options size {}'.format(options.size())) #squeeze for length
