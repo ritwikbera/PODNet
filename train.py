@@ -33,10 +33,12 @@ dataloader = DataLoader(my_dataset, batch_size=args.batch_size,
                     shuffle=True, num_workers=1)
 
 model = PODNet(
+    batch_size=args.batch_size,
     state_dim=args.state_dim,
     action_dim=args.action_dim,
     latent_dim=args.latent_dim,
-    categorical_dim=args.categorical_dim)
+    categorical_dim=args.categorical_dim,
+    device=device)
 
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
 writer = create_summary_writer(model, dataloader, args.log_dir)
@@ -47,7 +49,7 @@ model.train()
 def train_step(batch, device=device):
     
     states, next_states, actions = batch
-    model.init() #reset hidden states/option label for each new trajectory batch
+    model.reset() #reset hidden states/option label for each new trajectory batch
 
     for i in range(args.MAX_LENGTH/args.SEGMENT_SIZE):
         

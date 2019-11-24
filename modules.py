@@ -2,8 +2,29 @@ import torch
 from torch import Tensor, nn
 import torch.nn.functional as F 
 
+class Decoder(nn.Module):
+    def __init__(self, in_dim, out_dim, latent_dim, categorical_dim, use_dropout=True, mlp_hidden=32):
+        super(Decoder, self).__init__()
+
+        self.fc1 = nn.Linear(in_dim + latent_dim*categorical_dim, mlp_hidden)
+        self.fc2 = nn.Linear(mlp_hidden, mlp_hidden)
+        self.fc3 = nn.Linear(mlp_hidden, out_dim)
+        self.relu = nn.ReLU()
+        self.use_dropout = use_dropout
+        self.dropout = nn.Dropout(p=0.3)
+
+    def forward(self, s_t, c_t):
+        z = torch.cat((s_t, c_t), -1)
+        h1 = self.relu(self.fc1(z))
+        if self.use_dropout:
+            h1 = self.dropout(h1)
+        h2 = self.relu(self.fc2(h1))
+        if self.use_dropout:
+            h2 = self.dropout(h2)
+        return self.fc3(h2)
+
 class OptionEncoder_Recurrent(nn.Module):
-    def __init__(self, batch_size, input_size, categorical_dim=2, latent_dim=1, hidden_layer_size=32, num_layers=2, device='cpu'):
+    def __init__(self, batch_size, input_size, latent_dim=1, categorical_dim=2, device='cpu', hidden_layer_size=32, num_layers=2):
         super().__init__()
         self.input_size = input_size
         self.batch_size = batch_size
