@@ -8,6 +8,7 @@ from utils import *
 from models import *
 from ignite.engine import Engine, Events
 from ignite.metrics import RunningAverage
+from ignite.handlers import ModelCheckpoint
 
 parser = ArgumentParser()
 parser.add_argument('--batch_size', type=int, default=1)
@@ -87,6 +88,12 @@ def train_step(engine, batch):
 trainer = Engine(train_step)
 
 RunningAverage(output_transform=lambda x: x[-1]).attach(trainer, 'smooth loss')
+
+training_saver = ModelCheckpoint("checkpoints", filename_prefix="checkpoint", save_interval=1, n_saved=1, save_as_state_dict=True, create_dir=True)
+
+to_save = {"model": model, "optimizer": optimizer} 
+
+trainer.add_event_handler(Events.EPOCH_COMPLETED, training_saver, to_save) 
 
 @trainer.on(Events.EPOCH_COMPLETED)
 def print_loss(engine):
