@@ -47,7 +47,7 @@ optimizer = optim.Adam(model.parameters(), lr=args.lr)
 model.to(device)
 model.train()
 
-def train_step(batch, device=device):
+def train_step(engine, batch):
     
     states, next_states, actions = batch
     model.reset() #reset hidden states/option label for each new trajectory batch
@@ -84,12 +84,23 @@ def train_step(batch, device=device):
 
     return L_ODC.item(), L_BC.item(), loss.item()
 
+trainer = Engine(train_step)
+
+RunningAverage(output_transform=lambda x: x[-1]).attach(trainer, 'smooth loss')
+
+@trainer.on(Events.EPOCH_COMPLETED)
+def print_loss(engine):
+    print('Running Loss {:.2f}'.format(engine.state.metrics['smooth loss']))
+
+
+trainer.run(dataloader, args.epochs)
+
 def train():
     for i in range(args.epochs):
         for j, batch in enumerate(dataloader):
             L_ODC, L_BC, loss = train_step(batch)
             print('Loss {:.2f}'.format(loss))
 
-train()
+#train()
 
 #writer.close()
