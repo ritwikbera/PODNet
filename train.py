@@ -13,7 +13,7 @@ from ignite.handlers import ModelCheckpoint
 parser = ArgumentParser()
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--epochs', type=int, default=10)
-parser.add_argument('--lr', type=float, default=1e-3)
+parser.add_argument('--lr', type=float, default=1e-2)
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--log_dir', type=str, default='mylogs')
 parser.add_argument('--use_cuda', type=bool, default=False)
@@ -43,7 +43,7 @@ model = PODNet(
     device=device)
 
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
-#writer = create_summary_writer(model, dataloader, args.log_dir)
+writer = create_summary_writer(model, dataloader, args.log_dir+'/tensorboard')
 
 model.to(device)
 model.train()
@@ -89,7 +89,7 @@ trainer = Engine(train_step)
 
 RunningAverage(output_transform=lambda x: x[-1]).attach(trainer, 'smooth loss')
 
-training_saver = ModelCheckpoint(args.log_dir+'checkpoints', filename_prefix="checkpoint", save_interval=1, n_saved=1, save_as_state_dict=True, create_dir=True)
+training_saver = ModelCheckpoint(args.log_dir+'/checkpoints', filename_prefix="checkpoint", save_interval=1, n_saved=1, save_as_state_dict=True, create_dir=True)
 
 to_save = {"model": model, "optimizer": optimizer} 
 
@@ -98,7 +98,9 @@ trainer.add_event_handler(Events.EPOCH_COMPLETED, training_saver, to_save)
 @trainer.on(Events.EPOCH_COMPLETED)
 def print_loss(engine):
     print('Running Loss {:.2f}'.format(engine.state.metrics['smooth loss']))
-
+    writer.add_scalar("L_ODC", engine.state.output[0], engine.state.iteration)
+    writer.add_scalar("L_BC", engine.state.output[1], engine.state.iteration)
+    writer.add_scalar("Total Loss", engine.state.output[2], engine.state.iteration)
 
 trainer.run(dataloader, args.epochs)
 
@@ -110,4 +112,4 @@ def train():
 
 #train()
 
-#writer.close()
+writer.close()
