@@ -10,4 +10,9 @@ robots/*
 *.pickle
 *.pth
 
+!/data/*
+!/data/circleworld/*
+!/data/minigrid/*
+!/data/robotarium/*
+
 playground.py

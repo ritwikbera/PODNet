@@ -32,11 +32,10 @@ def load_segment_stack(trajectory, PAD_TOKEN=0, MAX_LENGTH=2048, SEGMENT_SIZE=51
     return states, true_next_states
 
 class RoboDataset(Dataset):
-    def __init__(self, PAD_TOKEN, MAX_LENGTH, SEGMENT_SIZE, root_dir='data/'):
+    def __init__(self, PAD_TOKEN, MAX_LENGTH, root_dir='data/'):
         self.root_dir = root_dir
         self.PAD_TOKEN = PAD_TOKEN
         self.MAX_LENGTH = MAX_LENGTH
-        self.SEGMENT_SIZE = SEGMENT_SIZE
 
     def __len__(self):
         return len(glob.glob(self.root_dir+'*.csv'))
@@ -45,22 +44,21 @@ class RoboDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
         file = glob.glob(self.root_dir+'*.csv')[idx]
-        traj_file = pd.read_csv(file)
+        traj = pd.read_csv(file)
         
-        states = Tensor(np.array([traj_file['x_t'], traj_file['y_t']]).T)
-        actions = Tensor(np.array([traj_file['a_x'], traj_file['a_y']]).T)
-        next_states = states[1:]
-        
+        states = Tensor(np.array(traj.loc[:,'x_t':'a_1'])[:,:-1])
+        actions = Tensor(np.array(traj.loc[:,'a_1':]))
+
         states = pad_trajectory(states, self.PAD_TOKEN, self.MAX_LENGTH)
         actions = pad_trajectory(actions, self.PAD_TOKEN, self.MAX_LENGTH)
-        next_states = pad_trajectory(next_states, self.PAD_TOKEN, self.MAX_LENGTH)
+        next_states = pad_trajectory(states[1:], self.PAD_TOKEN, self.MAX_LENGTH)
         
         return states, next_states, actions
 
 if __name__ == '__main__':
     from torch.utils.data import DataLoader 
-    my_dataset = RoboDataset(PAD_TOKEN=0, MAX_LENGTH=2048, SEGMENT_SIZE=512)
-    dataloader = DataLoader(my_dataset, batch_size=1,
+    my_dataset = RoboDataset(PAD_TOKEN=0, MAX_LENGTH=20, root_dir='data/minigrid/')
+    dataloader = DataLoader(my_dataset, batch_size=4,
                     shuffle=True, num_workers=1)
     batch = next(iter(dataloader))
 

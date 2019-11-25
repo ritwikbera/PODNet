@@ -10,25 +10,28 @@ from models import *
 from ignite.engine import Engine, Events
 from ignite.metrics import RunningAverage
 from ignite.handlers import ModelCheckpoint
+from ignite.contrib.handlers.param_scheduler import LinearCyclicalScheduler
 
 parser = ArgumentParser()
-parser.add_argument('--batch_size', type=int, default=1)
-parser.add_argument('--epochs', type=int, default=10)
-parser.add_argument('--lr', type=float, default=1e-2)
+parser.add_argument('--batch_size', type=int, default=4)
+parser.add_argument('--epochs', type=int, default=100)
+parser.add_argument('--lr', type=float, default=1e-3)
+parser.add_argument('--dataset', type=str, default='minigrid')
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--log_dir', type=str, default='mylogs')
 parser.add_argument('--use_cuda', type=bool, default=False)
 parser.add_argument('--PAD_TOKEN', type=int, default=-99)
-parser.add_argument('--MAX_LENGTH', type=int, default=2048)
-parser.add_argument('--SEGMENT_SIZE', type=int, default=512)
+parser.add_argument('--MAX_LENGTH', type=int, default=20)
+parser.add_argument('--SEGMENT_SIZE', type=int, default=20)
 parser.add_argument('--latent_dim', type=int, default=1)
 parser.add_argument('--categorical_dim', type=int, default=2)
-parser.add_argument('--state_dim', type=int, default=2)
-parser.add_argument('--action_dim', type=int, default=2)
+parser.add_argument('--state_dim', type=int, default=3)
+parser.add_argument('--action_dim', type=int, default=1)
 parser.add_argument('--launch_tb', type=bool, default=False)
 
 args = parser.parse_args()
 
+torch.manual_seed(100)
 #clean start
 try:
     shutil.rmtree(args.log_dir)
@@ -37,7 +40,10 @@ except Exception as e:
 
 device = 'cuda' if args.use_cuda and torch.cuda.is_available() else 'cpu'
 
-my_dataset = RoboDataset(args.PAD_TOKEN, args.MAX_LENGTH, args.SEGMENT_SIZE)
+my_dataset = RoboDataset(
+    PAD_TOKEN=args.PAD_TOKEN, 
+    MAX_LENGTH=args.MAX_LENGTH, 
+    root_dir='data/'+args.dataset+'/')
 
 dataloader = DataLoader(my_dataset, batch_size=args.batch_size,
                     shuffle=True, num_workers=1)
@@ -101,7 +107,11 @@ RunningAverage(output_transform=lambda x: x[-1].item()).attach(trainer, 'smooth 
 
 training_saver = ModelCheckpoint(args.log_dir+'/checkpoints', filename_prefix="checkpoint", save_interval=1, n_saved=1, save_as_state_dict=True, create_dir=True)
 to_save = {"model": model, "optimizer": optimizer} 
+
+scheduler_1 = LinearCyclicalScheduler(optimizer, "lr", start_value=1e-2, end_value=1e-1, cycle_size=60)
+
 trainer.add_event_handler(Events.EPOCH_COMPLETED, training_saver, to_save) 
+#trainer.add_event_handler(Events.ITERATION_STARTED, scheduler_1)
 
 @trainer.on(Events.EPOCH_COMPLETED)
 def print_loss(engine):
