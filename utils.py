@@ -8,9 +8,9 @@ from torch.utils.tensorboard import SummaryWriter
 
 def create_summary_writer(model, dataloader, log_dir):
     writer = SummaryWriter(log_dir=log_dir)
-    x, y =  next(iter(dataloader))
+    inputs =  next(iter(dataloader))
     try:
-        writer.add_graph(model, x)
+        writer.add_graph(model, inputs[0])
     except Exception as e:
         print("Failed to save model graph: {}".format(e))
     return writer
@@ -51,8 +51,19 @@ class RoboDataset(Dataset):
         actions = Tensor(np.array([traj_file['a_x'], traj_file['a_y']]).T)
         next_states = states[1:]
         
-        states = pad_trajectory(states, PAD_TOKEN, MAX_LENGTH)
-        actions = pad_trajectory(actions, PAD_TOKEN, MAX_LENGTH)
-        next_states = pad_trajectory(next_states, PAD_TOKEN, MAX_LENGTH)
+        states = pad_trajectory(states, self.PAD_TOKEN, self.MAX_LENGTH)
+        actions = pad_trajectory(actions, self.PAD_TOKEN, self.MAX_LENGTH)
+        next_states = pad_trajectory(next_states, self.PAD_TOKEN, self.MAX_LENGTH)
         
         return states, next_states, actions
+
+if __name__ == '__main__':
+    from torch.utils.data import DataLoader 
+    my_dataset = RoboDataset(PAD_TOKEN=0, MAX_LENGTH=2048, SEGMENT_SIZE=512)
+    dataloader = DataLoader(my_dataset, batch_size=1,
+                    shuffle=True, num_workers=1)
+    batch = next(iter(dataloader))
+
+    print(batch[0].size())
+    print(batch[1].size())
+    print(batch[2].size())

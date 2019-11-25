@@ -55,5 +55,5 @@ if __name__ == '__main__':
     outputs = model(states)
 
     print(outputs[0].size())
-    print(outputs[0].size())
-    print(outputs[0].size())
+    print(outputs[1].size())
+    print(outputs[2].size())
