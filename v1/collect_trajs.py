@@ -7,6 +7,7 @@ import time
 import datetime as dt
 from matplotlib import pyplot as plt
 import gym_minigrid
+import pandas as pd
 
 from gym import spaces
 
@@ -35,6 +36,7 @@ def main():
     # Structure: episode, time step, action, obs
     time_now = dt.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
     log_file = open('data/{}_log.csv'.format(time_now), 'w')
+    log_file.write('episode,time_step,action,x,y,heading\n')
 
     # Load the gym environment
     # Add wrapper to modify observation
