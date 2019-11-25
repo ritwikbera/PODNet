@@ -89,7 +89,7 @@ trainer = Engine(train_step)
 
 RunningAverage(output_transform=lambda x: x[-1]).attach(trainer, 'smooth loss')
 
-training_saver = ModelCheckpoint("checkpoints", filename_prefix="checkpoint", save_interval=1, n_saved=1, save_as_state_dict=True, create_dir=True)
+training_saver = ModelCheckpoint(args.log_dir+'checkpoints', filename_prefix="checkpoint", save_interval=1, n_saved=1, save_as_state_dict=True, create_dir=True)
 
 to_save = {"model": model, "optimizer": optimizer} 
 

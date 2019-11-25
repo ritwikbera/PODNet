@@ -1,0 +1,56 @@
+import argparse
+import os
+from subprocess import check_call
+import sys
+import multiprocessing as mp 
+import json
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--data_dir', default='data/')
+
+def launch_training_job(parent_dir, data_dir, job_name, params):
+
+    model_dir = os.path.join(parent_dir, job_name)
+    params['log_dir'] = model_dir
+    print_config(params)
+
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+
+
+
+    json_path = os.path.join(model_dir, 'params.json')
+    
+    with open(json_path, 'w') as outfile:
+        json.dump(params, outfile)
+
+    cmd = "python3 train.py --epochs={} --lr={} --log_dir={}".format(params['epochs'], params['learning_rate'], params['log_dir'])
+    
+    print(cmd)
+    check_call(cmd, shell=True)
+
+def print_config(params):
+    for key, value in params.items():
+        print('{} : {}'.format(key, value))
+    print('\n ---------- \n')
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+    params = json.load(open('params.json'))
+    
+    learning_rate = [1e-4, 1e-3, 1e-2]
+    epochs = [10, 20]
+    metrics = {'learning_rate' : learning_rate, 'epochs': epochs}
+    
+    os.makedirs('experiments', exist_ok=True)
+
+    for metric in metrics:
+        
+        parent_dir = 'experiments/'+ metric
+        os.makedirs(parent_dir, exist_ok=True)
+        
+        for value in metrics[metric]:
+            params[metric] = value
+            job_name = metric+"_{}".format(value)
+            
+            launch_training_job(parent_dir, args.data_dir, job_name, params)

@@ -39,12 +39,12 @@ class RoboDataset(Dataset):
         self.SEGMENT_SIZE = SEGMENT_SIZE
 
     def __len__(self):
-        return len(glob.glob(self.root_dir+'*'))
+        return len(glob.glob(self.root_dir+'*.csv'))
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        file = glob.glob(self.root_dir+'*')[idx]
+        file = glob.glob(self.root_dir+'*.csv')[idx]
         traj_file = pd.read_csv(file)
         
         states = Tensor(np.array([traj_file['x_t'], traj_file['y_t']]).T)
