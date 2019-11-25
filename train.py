@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 import os
+import shutil
 import torch
 from torch import Tensor, nn, optim 
 import torch.nn.functional as F
@@ -17,15 +18,22 @@ parser.add_argument('--lr', type=float, default=1e-2)
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--log_dir', type=str, default='mylogs')
 parser.add_argument('--use_cuda', type=bool, default=False)
-parser.add_argument('--PAD_TOKEN', type=int, default=0)
+parser.add_argument('--PAD_TOKEN', type=int, default=-99)
 parser.add_argument('--MAX_LENGTH', type=int, default=2048)
 parser.add_argument('--SEGMENT_SIZE', type=int, default=512)
 parser.add_argument('--latent_dim', type=int, default=1)
 parser.add_argument('--categorical_dim', type=int, default=2)
 parser.add_argument('--state_dim', type=int, default=2)
 parser.add_argument('--action_dim', type=int, default=2)
+parser.add_argument('--launch_tb', type=bool, default=False)
 
 args = parser.parse_args()
+
+#clean start
+try:
+    shutil.rmtree(args.log_dir)
+except Exception as e:
+    print('No {} directory present'.format(args.log_dir))
 
 device = 'cuda' if args.use_cuda and torch.cuda.is_available() else 'cpu'
 
@@ -52,7 +60,7 @@ def train_step(engine, batch):
     
     states, next_states, actions = batch
     model.reset() #reset hidden states/option label for each new trajectory batch
-    L_ODC, L_BC = 0, 0
+    L_ODC, L_BC, L_TS = 0,0,0
 
     for i in range(int(args.MAX_LENGTH/args.SEGMENT_SIZE)):
         
@@ -79,28 +87,37 @@ def train_step(engine, batch):
         L_ODC += (((next_state_segment - next_state_pred)**2)*mask1).sum(-1).sum(-2).mean()
         L_BC += (((action_segment - action_pred)**2)*mask2).sum(-1).sum(-2).mean()
 
-    loss = L_ODC + L_BC
+        L_TS += - 0.0*((c_t[:,1:,:]*c_t[:,:-1,:])*mask2[:,1:,:]).sum(-1).sum(-2).mean()
+    
+    loss = L_ODC + L_BC + L_TS
     loss.backward()
     optimizer.step()
 
-    return L_ODC.item(), L_BC.item(), loss.item()
+    return L_ODC, L_BC, L_TS, loss
 
 trainer = Engine(train_step)
 
-RunningAverage(output_transform=lambda x: x[-1]).attach(trainer, 'smooth loss')
+RunningAverage(output_transform=lambda x: x[-1].item()).attach(trainer, 'smooth loss')
 
 training_saver = ModelCheckpoint(args.log_dir+'/checkpoints', filename_prefix="checkpoint", save_interval=1, n_saved=1, save_as_state_dict=True, create_dir=True)
-
 to_save = {"model": model, "optimizer": optimizer} 
-
 trainer.add_event_handler(Events.EPOCH_COMPLETED, training_saver, to_save) 
 
 @trainer.on(Events.EPOCH_COMPLETED)
 def print_loss(engine):
     print('Running Loss {:.2f}'.format(engine.state.metrics['smooth loss']))
-    writer.add_scalar("L_ODC", engine.state.output[0], engine.state.iteration)
-    writer.add_scalar("L_BC", engine.state.output[1], engine.state.iteration)
-    writer.add_scalar("Total Loss", engine.state.output[2], engine.state.iteration)
+    
+@trainer.on(Events.ITERATION_COMPLETED)
+def tb_log(engine):
+    writer.add_scalar("Dynamics Loss", engine.state.output[0].item(), engine.state.iteration)
+    writer.add_scalar("Behavior Cloning Loss", engine.state.output[1].item(), engine.state.iteration)
+    writer.add_scalar("Temporal Smoothing Loss", engine.state.output[2].item(), engine.state.iteration)
+    writer.add_scalar("Total Loss", engine.state.output[-1].item(), engine.state.iteration)
+
+@trainer.on(Events.COMPLETED)
+def cleanup(engine):
+    if args.launch_tb:
+        os.system('tensorboard --logdir={}/tensorboard'.format(args.log_dir))
 
 trainer.run(dataloader, args.epochs)
 
