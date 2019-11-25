@@ -1,0 +1,26 @@
+{
+	"experiment1": 
+	{
+	    "model_version": "recurrent",
+	    "learning_rate": 1e-3,
+	    "batch_size": 1,
+	    "epochs": 10,
+	    "log_dir" : "mylogs"
+	},
+	"experiment2": 
+	{
+	    "model_version": "recurrent",
+	    "learning_rate": 1e-2,
+	    "batch_size": 1,
+	    "epochs": 10,
+	    "log_dir" : "mylogs"
+	},
+	"experiment3": 
+	{
+	    "model_version": "recurrent",
+	    "learning_rate": 1e-1,
+	    "batch_size": 1,
+	    "epochs": 10,
+	    "log_dir" : "mylogs"
+	}
+}

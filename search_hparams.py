@@ -24,10 +24,10 @@ def launch_training_job(parent_dir, data_dir, job_name, params):
     with open(json_path, 'w') as outfile:
         json.dump(params, outfile)
 
-    cmd = "python3 train.py --epochs={} --lr={} --log_dir={}".format(params['epochs'], params['learning_rate'], params['log_dir'])
+    # cmd = "python3 train.py --epochs={} --lr={} --log_dir={}".format(params['epochs'], params['learning_rate'], params['log_dir'])
     
-    print(cmd)
-    check_call(cmd, shell=True)
+    # print(cmd)
+    # check_call(cmd, shell=True)
 
 def print_config(params):
     for key, value in params.items():
@@ -36,21 +36,11 @@ def print_config(params):
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    params = json.load(open('params.json'))
-    
-    learning_rate = [1e-4, 1e-3, 1e-2]
-    epochs = [10, 20]
-    metrics = {'learning_rate' : learning_rate, 'epochs': epochs}
-    
-    os.makedirs('experiments', exist_ok=True)
+    experiments = json.load(open('experiments.json'))
+    parent_dir = 'experiments'
+    os.makedirs(parent_dir, exist_ok=True)
 
-    for metric in metrics:
-        
-        parent_dir = 'experiments/'+ metric
-        os.makedirs(parent_dir, exist_ok=True)
-        
-        for value in metrics[metric]:
-            params[metric] = value
-            job_name = metric+"_{}".format(value)
-            
-            launch_training_job(parent_dir, args.data_dir, job_name, params)
+    for experiment in experiments:
+        params = experiments[experiment]
+        job_name = experiment
+        launch_training_job(parent_dir, args.data_dir, job_name, params)
