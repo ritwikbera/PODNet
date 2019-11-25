@@ -62,6 +62,10 @@ def train_step(batch, device=device):
         next_state_segment = next_states[:,seg_start:seg_end]
         action_segment = actions[:,seg_start:seg_end]
 
+        empty_segment = torch.ones(cur_state_segment.size())*args.PAD_TOKEN
+        if torch.all(torch.eq(cur_state_segment,empty_segment)):
+            break
+
         optimizer.zero_grad()
 
         action_pred, next_state_pred, c_t = model(cur_state_segment)
