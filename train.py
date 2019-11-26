@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 import os
 import shutil
+import numpy as np 
 import torch
 from torch import Tensor, nn, optim 
 import torch.nn.functional as F
@@ -39,6 +40,9 @@ conf = config(args.dataset)
 
 use_discrete = True if args.dataset=='minigrid' else False
 PAD_TOKEN = -99
+tau = 5.0
+tau_min = 0.1
+ANNEAL_RATE = 0.003
 
 my_dataset = RoboDataset(
     PAD_TOKEN=PAD_TOKEN, 
@@ -95,7 +99,7 @@ def train_step(engine, batch):
 
         optimizer.zero_grad()
 
-        action_pred, next_state_pred, c_t = model(cur_state_segment)
+        action_pred, next_state_pred, c_t = model(cur_state_segment, tau)
         
         L_ODC += DynamicsLoss(next_state_segment, next_state_pred, PAD_TOKEN, device)
         L_BC += BCLoss(action_segment, action_pred, PAD_TOKEN, device, use_discrete)
@@ -128,6 +132,11 @@ def tb_log(engine):
     writer.add_scalar("Behavior Cloning Loss", engine.state.output[1].item(), engine.state.iteration)
     #writer.add_scalar("Temporal Smoothing Loss", engine.state.output[2].item(), engine.state.iteration)
     writer.add_scalar("Total Loss", engine.state.output[-1].item(), engine.state.iteration)
+
+@trainer.on(Events.EPOCH_COMPLETED)
+def update_temp(engine):
+    global tau 
+    tau = np.maximum(tau * np.exp(-ANNEAL_RATE*engine.state.epoch), tau_min)
 
 @trainer.on(Events.COMPLETED)
 def cleanup(engine):

@@ -51,8 +51,8 @@ class PODNet(nn.Module):
     def reset(self):
         self.infer_option.init_states()
 
-    def forward(self, s_t):
-        c_t = self.infer_option(s_t)
+    def forward(self, s_t, tau):
+        c_t = self.infer_option(s_t, tau=tau)
         next_state_pred = self.decode_next_state(s_t, c_t)
         action_pred = self.decode_action(s_t, c_t)
 

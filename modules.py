@@ -23,7 +23,7 @@ class OptionEncoder_MLP(nn.Module):
     def init_states(self):
         self.c_t = torch.eye(self.categorical_dim)[0].repeat(self.batch_size,1,self.latent_dim).to(self.device)
 
-    def forward(self, states, temp=0.1):
+    def forward(self, states, tau):
         steps = states.size(1)
         c_stored = self.c_t
         for i in range(steps):
@@ -40,7 +40,7 @@ class OptionEncoder_MLP(nn.Module):
             q = self.fc3(h2)
 
             q_y = q.view(*q.size()[:-1], self.latent_dim, self.categorical_dim)
-            self.c_t = F.gumbel_softmax(q_y, tau=temp, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
+            self.c_t = F.gumbel_softmax(q_y, tau=tau, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
 
             c_stored = torch.cat((c_stored, self.c_t), dim = 1)
 
@@ -57,14 +57,14 @@ class OptionEncoder_Attentive(nn.Module):
         self.ffn = FeedForward(state_dim+1, latent_dim*categorical_dim)
         self.device = device
 
-    def forward(self, s_t, temp=0.1):
+    def forward(self, s_t, tau):
         a = torch.arange(s_t.size()[-2])
         mask = (a[None, :] <= a[:, None]).type(torch.FloatTensor).to(self.device)
         s_t = self.pos_enc(s_t)
         q = self.ffn(self.mhatt(s_t, s_t, s_t, mask))
 
         q_y = q.view(*q.size()[:-1], self.latent_dim, self.categorical_dim)
-        c_stored = F.gumbel_softmax(q_y, tau=temp, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
+        c_stored = F.gumbel_softmax(q_y, tau=tau, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
 
         return c_stored
 
@@ -121,7 +121,7 @@ class OptionEncoder_Recurrent(nn.Module):
         
         self.c_t = torch.eye(self.categorical_dim)[0].repeat(self.batch_size,1,self.latent_dim).to(self.device)
 
-    def forward(self, states, temp = 0.1):
+    def forward(self, states, tau):
         steps = states.size(1)
         c_stored = self.c_t
         for i in range(steps):
@@ -135,7 +135,7 @@ class OptionEncoder_Recurrent(nn.Module):
             q = self.linear(lstm_out)
 
             q_y = q.view(*q.size()[:-1], self.latent_dim, self.categorical_dim)
-            self.c_t = F.gumbel_softmax(q_y, tau=temp, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
+            self.c_t = F.gumbel_softmax(q_y, tau=tau, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
 
             c_stored = torch.cat((c_stored, self.c_t), dim = 1)
         
