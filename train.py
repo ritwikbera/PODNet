@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from utils import *
 from models import *
+from config import *
 from ignite.engine import Engine, Events
 from ignite.metrics import RunningAverage
 from ignite.handlers import ModelCheckpoint
@@ -20,13 +21,6 @@ parser.add_argument('--dataset', type=str, default='minigrid')
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--log_dir', type=str, default='mylogs')
 parser.add_argument('--use_cuda', type=bool, default=False)
-parser.add_argument('--PAD_TOKEN', type=int, default=-99)
-parser.add_argument('--MAX_LENGTH', type=int, default=20)
-parser.add_argument('--SEGMENT_SIZE', type=int, default=20)
-parser.add_argument('--latent_dim', type=int, default=1)
-parser.add_argument('--categorical_dim', type=int, default=2)
-parser.add_argument('--state_dim', type=int, default=3)
-parser.add_argument('--action_dim', type=int, default=3)
 parser.add_argument('--launch_tb', type=bool, default=False)
 
 args = parser.parse_args()
@@ -40,11 +34,14 @@ except Exception as e:
 
 device = 'cuda' if args.use_cuda and torch.cuda.is_available() else 'cpu'
 
+conf = config(args.dataset)
+
 use_discrete = True if args.dataset=='minigrid' else False
+PAD_TOKEN = -99
 
 my_dataset = RoboDataset(
-    PAD_TOKEN=args.PAD_TOKEN, 
-    MAX_LENGTH=args.MAX_LENGTH, 
+    PAD_TOKEN=PAD_TOKEN, 
+    MAX_LENGTH=conf.MAX_LENGTH, 
     root_dir='data/'+args.dataset+'/')
 
 dataloader = DataLoader(my_dataset, batch_size=args.batch_size,
@@ -52,12 +49,15 @@ dataloader = DataLoader(my_dataset, batch_size=args.batch_size,
 
 model = PODNet(
     batch_size=args.batch_size,
-    state_dim=args.state_dim,
-    action_dim=args.action_dim,
-    latent_dim=args.latent_dim,
-    categorical_dim=args.categorical_dim,
+    state_dim=conf.state_dim,
+    action_dim=conf.action_dim,
+    latent_dim=conf.latent_dim,
+    categorical_dim=conf.categorical_dim,
     use_discrete=use_discrete,
     device=device)
+
+MAX_LENGTH = conf.MAX_LENGTH
+SEGMENT_SIZE = conf.SEGMENT_SIZE
 
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
 writer = create_summary_writer(model, dataloader, args.log_dir+'/tensorboard')
@@ -71,16 +71,16 @@ def train_step(engine, batch):
     model.reset() #reset hidden states/option label for each new trajectory batch
     L_ODC, L_BC, L_TS = 0,0,0
 
-    for i in range(int(args.MAX_LENGTH/args.SEGMENT_SIZE)):
+    for i in range(int(MAX_LENGTH/SEGMENT_SIZE)):
         
-        seg_start = i*args.SEGMENT_SIZE
-        seg_end = (i+1)*args.SEGMENT_SIZE
+        seg_start = i*SEGMENT_SIZE
+        seg_end = (i+1)*SEGMENT_SIZE
 
         cur_state_segment = states[:,seg_start:seg_end]
         next_state_segment = next_states[:,seg_start:seg_end]
         action_segment = actions[:,seg_start:seg_end]
 
-        empty_segment = torch.ones(cur_state_segment.size())*args.PAD_TOKEN
+        empty_segment = torch.ones(cur_state_segment.size())*PAD_TOKEN
         if torch.all(torch.eq(cur_state_segment,empty_segment)):
             break
 
@@ -88,8 +88,8 @@ def train_step(engine, batch):
 
         action_pred, next_state_pred, c_t = model(cur_state_segment)
         
-        mask1 = (next_state_segment!=args.PAD_TOKEN).type(torch.FloatTensor).to(device)
-        mask2 = (action_segment!=args.PAD_TOKEN).type(torch.FloatTensor).to(device)
+        mask1 = (next_state_segment!=PAD_TOKEN).type(torch.FloatTensor).to(device)
+        mask2 = (action_segment!=PAD_TOKEN).type(torch.FloatTensor).to(device)
 
         #sum MSE across dimensions, length and average across batch
 
