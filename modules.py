@@ -21,7 +21,7 @@ class OptionEncoder_MLP(nn.Module):
         self.init_states()
 
     def init_states(self):
-        self.c_t = torch.eye(self.categorical_dim)[0].repeat(self.batch_size,1,self.latent_dim)
+        self.c_t = torch.eye(self.categorical_dim)[0].repeat(self.batch_size,1,self.latent_dim).to(self.device)
 
     def forward(self, states, temp=0.1):
         steps = states.size(1)
@@ -29,9 +29,9 @@ class OptionEncoder_MLP(nn.Module):
         for i in range(steps):
             state = states[:,i]
             state = state.view(state.size(0),1,state.size(-1))
-    
             z = torch.cat((state, self.c_t.detach()), -1)
             h1 = self.relu(self.fc1(z))
+
             if self.use_dropout:
                 h1 = self.dropout(h1)
             h2 = self.relu(self.fc2(h1))
@@ -67,6 +67,10 @@ class OptionEncoder_Attentive(nn.Module):
         c_stored = F.gumbel_softmax(q_y, tau=temp, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
 
         return c_stored
+
+    def init_states(self):
+        # make sure to add ".to(self.device)" for any crete tensor
+        raise NotImplementedError
 
 class Decoder(nn.Module):
     def __init__(self, in_dim, out_dim, latent_dim, categorical_dim, use_dropout=True, mlp_hidden=32):
@@ -113,10 +117,10 @@ class OptionEncoder_Recurrent(nn.Module):
     def init_states(self):
         num_layers, batch_size, hidden_layer_size = \
         self.num_layers, self.batch_size, self.hidden_layer_size
-        self.hidden_cell = (torch.zeros(num_layers,batch_size,hidden_layer_size),
-                            torch.zeros(num_layers,batch_size,hidden_layer_size))
+        self.hidden_cell = (torch.zeros(num_layers,batch_size,hidden_layer_size).to(self.device),
+                            torch.zeros(num_layers,batch_size,hidden_layer_size).to(self.device))
         
-        self.c_t = torch.eye(self.categorical_dim)[0].repeat(self.batch_size,1,self.latent_dim)
+        self.c_t = torch.eye(self.categorical_dim)[0].repeat(self.batch_size,1,self.latent_dim).to(self.device)
 
     def forward(self, states, temp = 0.1):
         steps = states.size(1)
