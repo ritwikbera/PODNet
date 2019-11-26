@@ -1,6 +1,29 @@
 import torch
 from torch import Tensor, nn
 import torch.nn.functional as F 
+from layers import *
+
+class OptionEncoder_Attentive(nn.Module):
+    def __init__(self, state_dim, latent_dim, categorical_dim, NUM_HEADS=2, use_dropout=False, device='cpu'):
+        super(OptionEncoder_Attentive, self).__init__()
+        self.state_dim = state_dim
+        self.latent_dim = latent_dim
+        self.categorical_dim = categorical_dim
+        self.pos_enc = PositionalEncoder()
+        self.mhatt = MultiHeadAttention(state_dim+1, heads=NUM_HEADS)
+        self.ffn = FeedForward(state_dim+1, latent_dim*categorical_dim)
+        self.device = device
+
+    def forward(self, s_t, temp=0.1):
+        a = torch.arange(s_t.size()[-2])
+        mask = (a[None, :] <= a[:, None]).type(torch.FloatTensor).to(self.device)
+        s_t = self.pos_enc(s_t)
+        q = self.ffn(self.mhatt(s_t, s_t, s_t, mask))
+
+        q_y = q.view(*q.size()[:-1], self.latent_dim, self.categorical_dim)
+        c_stored = F.gumbel_softmax(q_y, tau=temp, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
+
+        return c_stored
 
 class Decoder(nn.Module):
     def __init__(self, in_dim, out_dim, latent_dim, categorical_dim, use_dropout=True, mlp_hidden=32):
@@ -24,7 +47,7 @@ class Decoder(nn.Module):
         return self.fc3(h2)
 
 class OptionEncoder_Recurrent(nn.Module):
-    def __init__(self, batch_size, input_size, latent_dim=1, categorical_dim=2, device='cpu', hidden_layer_size=32, num_layers=2):
+    def __init__(self, batch_size, input_size, latent_dim, categorical_dim, device='cpu', hidden_layer_size=32, num_layers=2):
         super().__init__()
         self.input_size = input_size
         self.batch_size = batch_size
@@ -74,8 +97,14 @@ class OptionEncoder_Recurrent(nn.Module):
 
 if __name__ == '__main__':
     states = torch.randn(4,10,2)
-    enc = OptionEncoder_Recurrent(states.size(0),states.size(-1))
+    latent_dim = 2
+    categorical_dim = 3
+    enc = OptionEncoder_Recurrent(states.size(0),states.size(-1), latent_dim, categorical_dim)
+
+    enc2 = OptionEncoder_Attentive(states.size(-1), latent_dim, categorical_dim)
     enc.init_states()
     enc.eval()
     options = enc(states)
-    print('Options size {}'.format(options.size())) #squeeze for length
+    print('Options size R {}'.format(options.size()))
+    options2 = enc2(states)
+    print('Options size A {}'.format(options2.size())) 

@@ -7,15 +7,23 @@ from modules import *
 
 class PODNet(nn.Module):
     def __init__(self, batch_size, state_dim, action_dim, latent_dim, categorical_dim, 
-        use_discrete=False, device='cpu'):
+        encoder_type='recurrent', use_discrete=False, device='cpu'):
         super(PODNet, self).__init__()
 
-        self.infer_option = OptionEncoder_Recurrent(
-            batch_size=batch_size,
-            input_size=state_dim, 
-            latent_dim=latent_dim, 
-            categorical_dim=categorical_dim,
-            device=device)
+        if encoder_type == 'recurrent':
+            self.infer_option = OptionEncoder_Recurrent(
+                batch_size=batch_size,
+                input_size=state_dim, 
+                latent_dim=latent_dim, 
+                categorical_dim=categorical_dim,
+                device=device)
+
+        elif encoder_type == 'attentive':
+            self.infer_option = OptionEncoder_Attentive(
+                state_dim=state_dim,
+                latent_dim=latent_dim,
+                categorical_dim=categorical_dim,
+                device=device)
         
         self.decode_next_state = Decoder(
             in_dim=state_dim, 
@@ -54,6 +62,7 @@ if __name__ == '__main__':
         action_dim=states.size(-1),
         latent_dim=1,
         categorical_dim=2,
+        encoder_type='recurrent',
         device='cpu')
 
     model.reset()
