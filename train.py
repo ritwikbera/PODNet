@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from utils import *
 from models import *
 from config import *
+from losses import *
 from ignite.engine import Engine, Events
 from ignite.metrics import RunningAverage
 from ignite.handlers import ModelCheckpoint
@@ -88,19 +89,8 @@ def train_step(engine, batch):
 
         action_pred, next_state_pred, c_t = model(cur_state_segment)
         
-        mask1 = (next_state_segment!=PAD_TOKEN).type(torch.FloatTensor).to(device)
-        mask2 = (action_segment!=PAD_TOKEN).type(torch.FloatTensor).to(device)
-
-        #sum MSE across dimensions, length and average across batch
-
-        L_ODC += (((next_state_segment - next_state_pred)**2)*mask1).sum(-1).sum(-2).mean()
-        
-        if use_discrete:
-            L_BC += (F.binary_cross_entropy(action_pred,action_segment,reduction='none')*mask2).sum(-1).sum(-2).mean()
-        else:   
-            L_BC += (((action_segment - action_pred)**2)*mask2).sum(-1).sum(-2).mean()
-
-        #L_TS += - 0.0*((c_t[:,1:,:]*c_t[:,:-1,:])*mask2[:,1:,:]).sum(-1).sum(-2).mean()
+        L_ODC += DynamicsLoss(next_state_segment, next_state_pred, PAD_TOKEN)
+        L_BC += BCLoss(action_segment, action_pred, PAD_TOKEN, use_discrete)
     
     loss = L_ODC + L_BC + L_TS
     loss.backward()
