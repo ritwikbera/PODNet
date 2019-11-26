@@ -18,7 +18,7 @@ parser = ArgumentParser()
 parser.add_argument('--epochs', type=int, default=100)
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--dataset', type=str, default='circleworld', help='Enter minigrid or circleworld')
-parser.add_argument('--encoder_type', type=str, default='recurrent', help='Enter recurrent or attentive')
+parser.add_argument('--encoder_type', type=str, default='recurrent', help='Enter recurrent, attentive, or MLP')
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--log_dir', type=str, default='mylogs')
 parser.add_argument('--use_cuda', type=bool, default=False)
@@ -54,6 +54,7 @@ model = PODNet(
     action_dim=conf.action_dim,
     latent_dim=conf.latent_dim,
     categorical_dim=conf.categorical_dim,
+    encoder_type=args.encoder_type,
     use_discrete=use_discrete,
     device=device)
 
@@ -72,6 +73,11 @@ def train_step(engine, batch):
     model.reset() #reset hidden states/option label for each new trajectory batch
     L_ODC, L_BC, L_TS = 0,0,0
 
+    # send data to device
+    states = states.to(device)
+    next_states = next_states.to(device)
+    actions = actions.to(device)
+
     for i in range(int(MAX_LENGTH/SEGMENT_SIZE)):
         
         seg_start = i*SEGMENT_SIZE
@@ -82,6 +88,8 @@ def train_step(engine, batch):
         action_segment = actions[:,seg_start:seg_end]
 
         empty_segment = torch.ones(cur_state_segment.size())*PAD_TOKEN
+        empty_segment = empty_segment.to(device)
+
         if torch.all(torch.eq(cur_state_segment,empty_segment)):
             break
 
@@ -89,8 +97,8 @@ def train_step(engine, batch):
 
         action_pred, next_state_pred, c_t = model(cur_state_segment)
         
-        L_ODC += DynamicsLoss(next_state_segment, next_state_pred, PAD_TOKEN)
-        L_BC += BCLoss(action_segment, action_pred, PAD_TOKEN, use_discrete)
+        L_ODC += DynamicsLoss(next_state_segment, next_state_pred, PAD_TOKEN, device)
+        L_BC += BCLoss(action_segment, action_pred, PAD_TOKEN, device, use_discrete)
     
     loss = L_ODC + L_BC + L_TS
     loss.backward()
