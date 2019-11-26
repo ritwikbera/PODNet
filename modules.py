@@ -52,7 +52,7 @@ class OptionEncoder_Attentive(nn.Module):
         self.state_dim = state_dim
         self.latent_dim = latent_dim
         self.categorical_dim = categorical_dim
-        self.pos_enc = PositionalEncoder()
+        self.pos_enc = PositionalEncoder(device)
         self.mhatt = MultiHeadAttention(state_dim+1, heads=NUM_HEADS)
         self.ffn = FeedForward(state_dim+1, latent_dim*categorical_dim)
         self.device = device
@@ -69,8 +69,7 @@ class OptionEncoder_Attentive(nn.Module):
         return c_stored
 
     def init_states(self):
-        # make sure to add ".to(self.device)" for any crete tensor
-        raise NotImplementedError
+        pass
 
 class Decoder(nn.Module):
     def __init__(self, in_dim, out_dim, latent_dim, categorical_dim, use_dropout=True, mlp_hidden=32):

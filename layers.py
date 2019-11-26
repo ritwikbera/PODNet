@@ -20,12 +20,13 @@ class FeedForward(nn.Module):
         return x
 
 class PositionalEncoder(nn.Module):
-    def __init__(self):
+    def __init__(self, device):
         super().__init__()
+        self.device = device
  
     def forward(self, x):
         seg_length = x.size(-2)
-        pe = torch.zeros(seg_length, 1)
+        pe = torch.zeros(seg_length, 1).to(self.device)
 
         for pos in range(x.size(-2)):
             pe[pos,:] = math.sin((pos/(seg_length*10))*math.pi/2)
