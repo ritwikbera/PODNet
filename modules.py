@@ -3,6 +3,49 @@ from torch import Tensor, nn
 import torch.nn.functional as F 
 from layers import *
 
+class OptionEncoder_MLP(nn.Module):
+    def __init__(self, batch_size, state_dim, latent_dim, categorical_dim, 
+        use_dropout=False, mlp_hidden=32, device='cpu'):
+        super(OptionEncoder_MLP, self).__init__()
+        self.batch_size = batch_size
+        self.state_dim = state_dim
+        self.latent_dim = latent_dim
+        self.categorical_dim = categorical_dim
+        self.fc1 = nn.Linear(state_dim + latent_dim*categorical_dim, mlp_hidden)
+        self.fc2 = nn.Linear(mlp_hidden, mlp_hidden)
+        self.fc3 = nn.Linear(mlp_hidden, latent_dim*categorical_dim)
+        self.use_dropout = use_dropout
+        self.relu = nn.ReLU()
+        self.device = device
+
+        self.init_states()
+
+    def init_states(self):
+        self.c_t = torch.eye(self.categorical_dim)[0].repeat(self.batch_size,1,self.latent_dim)
+
+    def forward(self, states, temp=0.1):
+        steps = states.size(1)
+        c_stored = self.c_t
+        for i in range(steps):
+            state = states[:,i]
+            state = state.view(state.size(0),1,state.size(-1))
+    
+            z = torch.cat((state, self.c_t.detach()), -1)
+            h1 = self.relu(self.fc1(z))
+            if self.use_dropout:
+                h1 = self.dropout(h1)
+            h2 = self.relu(self.fc2(h1))
+            if self.use_dropout:
+                h2 = self.dropout(h2)
+            q = self.fc3(h2)
+
+            q_y = q.view(*q.size()[:-1], self.latent_dim, self.categorical_dim)
+            self.c_t = F.gumbel_softmax(q_y, tau=temp, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
+
+            c_stored = torch.cat((c_stored, self.c_t), dim = 1)
+
+        return c_stored[:,1:]
+
 class OptionEncoder_Attentive(nn.Module):
     def __init__(self, state_dim, latent_dim, categorical_dim, NUM_HEADS=2, use_dropout=False, device='cpu'):
         super(OptionEncoder_Attentive, self).__init__()
@@ -100,11 +143,14 @@ if __name__ == '__main__':
     latent_dim = 2
     categorical_dim = 3
     enc = OptionEncoder_Recurrent(states.size(0),states.size(-1), latent_dim, categorical_dim)
-
     enc2 = OptionEncoder_Attentive(states.size(-1), latent_dim, categorical_dim)
+    enc3 = OptionEncoder_MLP(states.size(0),states.size(-1), latent_dim, categorical_dim)
+
     enc.init_states()
     enc.eval()
     options = enc(states)
     print('Options size R {}'.format(options.size()))
     options2 = enc2(states)
     print('Options size A {}'.format(options2.size())) 
+    options3 = enc3(states)
+    print('Options size M {}'.format(options3.size()))

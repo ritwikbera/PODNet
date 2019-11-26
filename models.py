@@ -24,7 +24,15 @@ class PODNet(nn.Module):
                 latent_dim=latent_dim,
                 categorical_dim=categorical_dim,
                 device=device)
-        
+
+        elif encoder_type == 'MLP':
+            self.infer_option = OptionEncoder_MLP(
+                batch_size=batch_size,
+                state_dim=state_dim,
+                latent_dim=latent_dim,
+                categorical_dim=categorical_dim,
+                device=device)
+
         self.decode_next_state = Decoder(
             in_dim=state_dim, 
             out_dim=state_dim,
@@ -62,7 +70,7 @@ if __name__ == '__main__':
         action_dim=states.size(-1),
         latent_dim=1,
         categorical_dim=2,
-        encoder_type='recurrent',
+        encoder_type='MLP',
         device='cpu')
 
     model.reset()
