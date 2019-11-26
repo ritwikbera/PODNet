@@ -49,6 +49,11 @@ class RoboDataset(Dataset):
         states = Tensor(np.array(traj.loc[:,'x_t':'a_1'])[:,:-1])
         actions = Tensor(np.array(traj.loc[:,'a_1':]))
 
+        if self.root_dir == 'data/minigrid/':
+            action_dim = 3
+            actions = \
+            torch.zeros(*actions.size()[:-1], action_dim).scatter_(-1, actions.type(torch.LongTensor), 1)
+
         states = pad_trajectory(states, self.PAD_TOKEN, self.MAX_LENGTH)
         actions = pad_trajectory(actions, self.PAD_TOKEN, self.MAX_LENGTH)
         next_states = pad_trajectory(states[1:], self.PAD_TOKEN, self.MAX_LENGTH)
@@ -57,7 +62,7 @@ class RoboDataset(Dataset):
 
 if __name__ == '__main__':
     from torch.utils.data import DataLoader 
-    my_dataset = RoboDataset(PAD_TOKEN=0, MAX_LENGTH=20, root_dir='data/minigrid/')
+    my_dataset = RoboDataset(PAD_TOKEN=-99, MAX_LENGTH=20, root_dir='data/minigrid/')
     dataloader = DataLoader(my_dataset, batch_size=4,
                     shuffle=True, num_workers=1)
     batch = next(iter(dataloader))
@@ -65,3 +70,5 @@ if __name__ == '__main__':
     print(batch[0].size())
     print(batch[1].size())
     print(batch[2].size())
+
+    print(batch[2])

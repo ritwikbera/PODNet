@@ -26,7 +26,7 @@ parser.add_argument('--SEGMENT_SIZE', type=int, default=20)
 parser.add_argument('--latent_dim', type=int, default=1)
 parser.add_argument('--categorical_dim', type=int, default=2)
 parser.add_argument('--state_dim', type=int, default=3)
-parser.add_argument('--action_dim', type=int, default=1)
+parser.add_argument('--action_dim', type=int, default=3)
 parser.add_argument('--launch_tb', type=bool, default=False)
 
 args = parser.parse_args()
@@ -39,6 +39,8 @@ except Exception as e:
     print('No {} directory present'.format(args.log_dir))
 
 device = 'cuda' if args.use_cuda and torch.cuda.is_available() else 'cpu'
+
+use_discrete = True if args.dataset=='minigrid' else False
 
 my_dataset = RoboDataset(
     PAD_TOKEN=args.PAD_TOKEN, 
@@ -54,6 +56,7 @@ model = PODNet(
     action_dim=args.action_dim,
     latent_dim=args.latent_dim,
     categorical_dim=args.categorical_dim,
+    use_discrete=use_discrete,
     device=device)
 
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -87,13 +90,17 @@ def train_step(engine, batch):
         
         mask1 = (next_state_segment!=args.PAD_TOKEN).type(torch.FloatTensor).to(device)
         mask2 = (action_segment!=args.PAD_TOKEN).type(torch.FloatTensor).to(device)
-       
+
         #sum MSE across dimensions, length and average across batch
 
         L_ODC += (((next_state_segment - next_state_pred)**2)*mask1).sum(-1).sum(-2).mean()
-        L_BC += (((action_segment - action_pred)**2)*mask2).sum(-1).sum(-2).mean()
+        
+        if use_discrete:
+            L_BC += (F.binary_cross_entropy(action_pred,action_segment,reduction='none')*mask2).sum(-1).sum(-2).mean()
+        else:   
+            L_BC += (((action_segment - action_pred)**2)*mask2).sum(-1).sum(-2).mean()
 
-        L_TS += - 0.0*((c_t[:,1:,:]*c_t[:,:-1,:])*mask2[:,1:,:]).sum(-1).sum(-2).mean()
+        #L_TS += - 0.0*((c_t[:,1:,:]*c_t[:,:-1,:])*mask2[:,1:,:]).sum(-1).sum(-2).mean()
     
     loss = L_ODC + L_BC + L_TS
     loss.backward()
@@ -121,7 +128,7 @@ def print_loss(engine):
 def tb_log(engine):
     writer.add_scalar("Dynamics Loss", engine.state.output[0].item(), engine.state.iteration)
     writer.add_scalar("Behavior Cloning Loss", engine.state.output[1].item(), engine.state.iteration)
-    writer.add_scalar("Temporal Smoothing Loss", engine.state.output[2].item(), engine.state.iteration)
+    #writer.add_scalar("Temporal Smoothing Loss", engine.state.output[2].item(), engine.state.iteration)
     writer.add_scalar("Total Loss", engine.state.output[-1].item(), engine.state.iteration)
 
 @trainer.on(Events.COMPLETED)
