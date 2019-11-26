@@ -15,10 +15,9 @@ from ignite.handlers import ModelCheckpoint
 from ignite.contrib.handlers.param_scheduler import LinearCyclicalScheduler
 
 parser = ArgumentParser()
-parser.add_argument('--batch_size', type=int, default=4)
 parser.add_argument('--epochs', type=int, default=100)
 parser.add_argument('--lr', type=float, default=1e-3)
-parser.add_argument('--dataset', type=str, default='minigrid', help='Enter minigrid or circleworld')
+parser.add_argument('--dataset', type=str, default='circleworld', help='Enter minigrid or circleworld')
 parser.add_argument('--encoder_type', type=str, default='recurrent', help='Enter recurrent or attentive')
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--log_dir', type=str, default='mylogs')
@@ -46,11 +45,11 @@ my_dataset = RoboDataset(
     MAX_LENGTH=conf.MAX_LENGTH, 
     root_dir='data/'+args.dataset+'/')
 
-dataloader = DataLoader(my_dataset, batch_size=args.batch_size,
+dataloader = DataLoader(my_dataset, batch_size=conf.batch_size,
                     shuffle=True, num_workers=1)
 
 model = PODNet(
-    batch_size=args.batch_size,
+    batch_size=conf.batch_size,
     state_dim=conf.state_dim,
     action_dim=conf.action_dim,
     latent_dim=conf.latent_dim,

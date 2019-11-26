@@ -8,11 +8,11 @@ from torch.utils.tensorboard import SummaryWriter
 
 def create_summary_writer(model, dataloader, log_dir):
     writer = SummaryWriter(log_dir=log_dir)
-    inputs =  next(iter(dataloader))
-    try:
-        writer.add_graph(model, inputs[0])
-    except Exception as e:
-        print("Failed to save model graph: {}".format(e))
+    # inputs =  next(iter(dataloader))
+    # try:
+    #     writer.add_graph(model, inputs[0])
+    # except Exception as e:
+    #     print("Failed to save model graph: {}".format(e))
     return writer
 
 def pad_trajectory(trajectory, PAD_TOKEN, MAX_LENGTH):
@@ -46,14 +46,17 @@ class RoboDataset(Dataset):
         file = glob.glob(self.root_dir+'*.csv')[idx]
         traj = pd.read_csv(file)
         
-        states = Tensor(np.array(traj.loc[:,'x_t':'a_1'])[:,:-1])
-        actions = Tensor(np.array(traj.loc[:,'a_1':]))
-
         if self.root_dir == 'data/minigrid/':
+            states = Tensor(np.array(traj.loc[:,'x_t':'a_1'])[:,:-1])
+            actions = Tensor(np.array(traj.loc[:,'a_1':]))
             action_dim = 3
             actions = \
             torch.zeros(*actions.size()[:-1], action_dim).scatter_(-1, actions.type(torch.LongTensor), 1)
-
+        
+        elif self.root_dir == 'data/circleworld/':
+            states = Tensor(np.array(traj.loc[:,'x_t':'y_t']))
+            actions = Tensor(np.array(traj.loc[:,'a_1':]))
+        
         states = pad_trajectory(states, self.PAD_TOKEN, self.MAX_LENGTH)
         actions = pad_trajectory(actions, self.PAD_TOKEN, self.MAX_LENGTH)
         next_states = pad_trajectory(states[1:], self.PAD_TOKEN, self.MAX_LENGTH)

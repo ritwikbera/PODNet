@@ -7,6 +7,7 @@ class config():
             self.categorical_dim=4
             self.MAX_LENGTH = 20
             self.SEGMENT_SIZE = 20
+            self.batch_size = 4
 
         elif dataset=='circleworld':
             self.state_dim=2
@@ -15,6 +16,7 @@ class config():
             self.categorical_dim=2
             self.MAX_LENGTH=1024
             self.SEGMENT_SIZE=512
+            self.batch_size=1
 
 if __name__=='__main__':
     conf = config('circleworld')
