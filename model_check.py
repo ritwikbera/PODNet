@@ -20,7 +20,7 @@ my_dataset = RoboDataset(
 dataloader = DataLoader(my_dataset, batch_size=1,
                     shuffle=True, num_workers=1)
 
-filename = 'mylogs/checkpoints/checkpoint_model_1000.pth'
+filename = 'mylogs/checkpoints/checkpoint_model_200.pth'
 
 
 def load_model(filename, conf, enc_type='attentive'):
@@ -39,7 +39,7 @@ def load_model(filename, conf, enc_type='attentive'):
 
     return model
 
-podnet = load_model(filename, conf, enc_type='attentive')
+podnet = load_model(filename, conf, enc_type='recurrent')
 
 #plot first trajectory in the acquired batch
 def plot_podnet(batch, index_within_batch):
@@ -47,7 +47,7 @@ def plot_podnet(batch, index_within_batch):
 
     iterator = iter(dataloader)
 
-    for batch in range(batch+1):
+    for _ in range(batch+1):
         states, true_next_states, actions = next(iterator)
 
     action_pred, next_state_pred, c_t = podnet(states, tau=0.1)

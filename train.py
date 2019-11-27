@@ -18,7 +18,7 @@ from ignite.contrib.handlers.param_scheduler import LinearCyclicalScheduler
 parser = ArgumentParser()
 parser.add_argument('--epochs', type=int, default=100)
 parser.add_argument('--lr', type=float, default=1e-3)
-parser.add_argument('--dataset', type=str, default='circleworld', help='Enter minigrid or circleworld')
+parser.add_argument('--dataset', type=str, default='robotarium', help='Enter minigrid, robotarium or circleworld')
 parser.add_argument('--encoder_type', type=str, default='recurrent', help='Enter recurrent, attentive, or MLP')
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--log_dir', type=str, default='mylogs')
@@ -75,7 +75,7 @@ def train_step(engine, batch):
     
     states, next_states, actions = batch
     model.reset() #reset hidden states/option label for each new trajectory batch
-    L_ODC, L_BC, L_TS = 0,0,0
+    L_ODC, L_BC, L_TS, L_KL = 0,0,0,0
 
     # send data to device
     states = states.to(device)
@@ -91,6 +91,8 @@ def train_step(engine, batch):
         next_state_segment = next_states[:,seg_start:seg_end]
         action_segment = actions[:,seg_start:seg_end]
 
+        mask = (cur_state_segment!=Tensor([PAD_TOKEN, PAD_TOKEN])).type(torch.FloatTensor)[:,:,0]
+
         empty_segment = torch.ones(cur_state_segment.size())*PAD_TOKEN
         empty_segment = empty_segment.to(device)
 
@@ -103,12 +105,14 @@ def train_step(engine, batch):
         
         L_ODC += DynamicsLoss(next_state_segment, next_state_pred, PAD_TOKEN, device)
         L_BC += BCLoss(action_segment, action_pred, PAD_TOKEN, device, use_discrete)
+        L_KL += 0.5*KLDLoss(c_t, mask, conf.categorical_dim, device)
+        #L_TS += 0.0*TSLoss(c_t, mask)
     
-    loss = L_ODC + L_BC + L_TS
+    loss = L_ODC + L_BC + L_TS + L_KL
     loss.backward()
     optimizer.step()
 
-    return L_ODC, L_BC, L_TS, loss
+    return L_ODC, L_BC, L_TS, L_KL, loss
 
 trainer = Engine(train_step)
 
@@ -131,6 +135,7 @@ def tb_log(engine):
     writer.add_scalar("Dynamics Loss", engine.state.output[0].item(), engine.state.iteration)
     writer.add_scalar("Behavior Cloning Loss", engine.state.output[1].item(), engine.state.iteration)
     #writer.add_scalar("Temporal Smoothing Loss", engine.state.output[2].item(), engine.state.iteration)
+    writer.add_scalar("KL Divergence Penalty", engine.state.output[3].item(), engine.state.iteration)
     writer.add_scalar("Total Loss", engine.state.output[-1].item(), engine.state.iteration)
 
 @trainer.on(Events.EPOCH_COMPLETED)

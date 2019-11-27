@@ -56,6 +56,10 @@ class RoboDataset(Dataset):
         elif self.root_dir == 'data/circleworld/':
             states = Tensor(np.array(traj.loc[:,'x_t':'y_t']))
             actions = Tensor(np.array(traj.loc[:,'a_1':]))
+
+        elif self.root_dir == 'data/robotarium/':
+            states = Tensor(np.array(traj.loc[:,'x_t':'y_t']))
+            actions = Tensor(np.array(traj.loc[:,'a_x':'a_y']))
         
         states = pad_trajectory(states, self.PAD_TOKEN, self.MAX_LENGTH)
         actions = pad_trajectory(actions, self.PAD_TOKEN, self.MAX_LENGTH)

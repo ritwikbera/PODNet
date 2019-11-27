@@ -18,6 +18,15 @@ class config():
             self.SEGMENT_SIZE=512
             self.batch_size=1
 
+        elif dataset=='robotarium':
+            self.state_dim=2
+            self.action_dim=2
+            self.latent_dim=1
+            self.categorical_dim=4
+            self.MAX_LENGTH=10240
+            self.SEGMENT_SIZE=512
+            self.batch_size=2
+
 if __name__=='__main__':
     conf = config('circleworld')
     print(conf.SEGMENT_SIZE)
