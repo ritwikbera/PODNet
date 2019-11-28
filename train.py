@@ -53,7 +53,6 @@ dataloader = DataLoader(my_dataset, batch_size=conf.batch_size,
                     shuffle=True, num_workers=1)
 
 model = PODNet(
-    batch_size=conf.batch_size,
     state_dim=conf.state_dim,
     action_dim=conf.action_dim,
     latent_dim=conf.latent_dim,
@@ -74,7 +73,7 @@ model.train()
 def train_step(engine, batch):
     
     states, next_states, actions = batch
-    model.reset() #reset hidden states/option label for each new trajectory batch
+    model.reset(states.size(0)) #reset hidden states/option label for each new trajectory batch
     L_ODC, L_BC, L_TS, L_KL = 0,0,0,0
 
     # send data to device

@@ -6,11 +6,17 @@ from utils import RoboDataset
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import os
+from argparse import ArgumentParser
+
+parser = ArgumentParser()
+parser.add_argument('--dataset', type=str, default='robotarium')
+parser.add_argument('--encoder_type', type=str, default='attentive')
+parser.add_argument('--filename', type=str, default='checkpoint_model_23')
+args = parser.parse_args()
 
 PAD_TOKEN = -99.0
-dataset = 'circleworld'
 
-conf = config(dataset)
+conf = config(args.dataset)
 
 my_dataset = RoboDataset(
     PAD_TOKEN=PAD_TOKEN, 
@@ -20,12 +26,11 @@ my_dataset = RoboDataset(
 dataloader = DataLoader(my_dataset, batch_size=1,
                     shuffle=True, num_workers=1)
 
-filename = 'mylogs/checkpoints/checkpoint_model_200.pth'
+filename = 'mylogs/checkpoints/'+args.filename
 
 
-def load_model(filename, conf, enc_type='attentive'):
+def load_model(filename, conf, enc_type):
     model = PODNet(
-        batch_size=conf.batch_size,
         state_dim=conf.state_dim,
         action_dim=conf.action_dim,
         latent_dim=conf.latent_dim,
@@ -39,7 +44,7 @@ def load_model(filename, conf, enc_type='attentive'):
 
     return model
 
-podnet = load_model(filename, conf, enc_type='recurrent')
+podnet = load_model(filename, conf, enc_type=args.encoder_type)
 
 #plot first trajectory in the acquired batch
 def plot_podnet(batch, index_within_batch):
@@ -49,6 +54,10 @@ def plot_podnet(batch, index_within_batch):
 
     for _ in range(batch+1):
         states, true_next_states, actions = next(iterator)
+
+    print(states.size())
+
+    podnet.reset(states.size(0))
 
     action_pred, next_state_pred, c_t = podnet(states, tau=0.1)
 
@@ -70,8 +79,6 @@ def plot_podnet(batch, index_within_batch):
             stop_index = index
             break
 
-    time = np.arange(0,stop_index,10)
-
     # plot
     os.makedirs('plots', exist_ok=True)
     plt.figure()
@@ -87,7 +94,8 @@ def plot_podnet(batch, index_within_batch):
     plt.show()
 
     plt.figure()
-    c_t = c_t[0:stop_index:10]
+    time = np.arange(0,stop_index,100)
+    c_t = c_t[0:stop_index:100]
     plt.plot(time, np.argmax(c_t, axis=-1), 'ro')
     plt.xlabel('Time Steps')
     plt.ylabel('Option')

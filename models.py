@@ -6,13 +6,12 @@ from torch.autograd import Variable
 from modules import *
 
 class PODNet(nn.Module):
-    def __init__(self, batch_size, state_dim, action_dim, latent_dim, categorical_dim, 
+    def __init__(self, state_dim, action_dim, latent_dim, categorical_dim, 
         encoder_type='recurrent', use_discrete=False, device='cpu'):
         super(PODNet, self).__init__()
 
         if encoder_type == 'recurrent':
             self.infer_option = OptionEncoder_Recurrent(
-                batch_size=batch_size,
                 input_size=state_dim, 
                 latent_dim=latent_dim, 
                 categorical_dim=categorical_dim,
@@ -27,7 +26,6 @@ class PODNet(nn.Module):
 
         elif encoder_type == 'MLP':
             self.infer_option = OptionEncoder_MLP(
-                batch_size=batch_size,
                 state_dim=state_dim,
                 latent_dim=latent_dim,
                 categorical_dim=categorical_dim,
@@ -48,8 +46,8 @@ class PODNet(nn.Module):
         self.device = device
         self.use_discrete = use_discrete
 
-    def reset(self):
-        self.infer_option.init_states()
+    def reset(self, batch_size):
+        self.infer_option.init_states(batch_size)
 
     def forward(self, s_t, tau):
         c_t = self.infer_option(s_t, tau=tau)

@@ -4,10 +4,9 @@ import torch.nn.functional as F
 from layers import *
 
 class OptionEncoder_MLP(nn.Module):
-    def __init__(self, batch_size, state_dim, latent_dim, categorical_dim, 
+    def __init__(self, state_dim, latent_dim, categorical_dim, 
         use_dropout=False, mlp_hidden=32, device='cpu'):
         super(OptionEncoder_MLP, self).__init__()
-        self.batch_size = batch_size
         self.state_dim = state_dim
         self.latent_dim = latent_dim
         self.categorical_dim = categorical_dim
@@ -18,13 +17,11 @@ class OptionEncoder_MLP(nn.Module):
         self.relu = nn.ReLU()
         self.device = device
 
-        self.init_states()
-
-    def init_states(self):
-        self.c_t = torch.eye(self.categorical_dim)[0].repeat(self.batch_size,1,self.latent_dim).to(self.device)
+    def init_states(self, batch_size):
+        self.c_t = torch.eye(self.categorical_dim)[0].repeat(batch_size,1,self.latent_dim).to(self.device)
 
     def forward(self, states, tau):
-        steps = states.size(1)
+        steps = states.size(1)        
         c_stored = self.c_t
         for i in range(steps):
             state = states[:,i]
@@ -68,7 +65,7 @@ class OptionEncoder_Attentive(nn.Module):
 
         return c_stored
 
-    def init_states(self):
+    def init_states(self, batch_size):
         pass
 
 class Decoder(nn.Module):
@@ -93,10 +90,9 @@ class Decoder(nn.Module):
         return self.fc3(h2)
 
 class OptionEncoder_Recurrent(nn.Module):
-    def __init__(self, batch_size, input_size, latent_dim, categorical_dim, device='cpu', hidden_layer_size=32, num_layers=2):
+    def __init__(self, input_size, latent_dim, categorical_dim, device='cpu', hidden_layer_size=32, num_layers=2):
         super().__init__()
         self.input_size = input_size
-        self.batch_size = batch_size
         self.latent_dim =latent_dim
         self.categorical_dim = categorical_dim
         self.hidden_layer_size = hidden_layer_size
@@ -107,19 +103,17 @@ class OptionEncoder_Recurrent(nn.Module):
          hidden_layer_size, num_layers, batch_first=True)
         self.linear = nn.Linear(hidden_layer_size, latent_dim*categorical_dim)
         
-        self.init_states()
         self.init_params()
 
     def init_params(self):
-        self.linear.bias = nn.Parameter(self.c_t[0,0,:])
+        self.linear.bias = nn.Parameter(torch.eye(self.categorical_dim)[0])
 
-    def init_states(self):
-        num_layers, batch_size, hidden_layer_size = \
-        self.num_layers, self.batch_size, self.hidden_layer_size
+    def init_states(self, batch_size):
+        num_layers, hidden_layer_size = self.num_layers, self.hidden_layer_size
         self.hidden_cell = (torch.zeros(num_layers,batch_size,hidden_layer_size).to(self.device),
                             torch.zeros(num_layers,batch_size,hidden_layer_size).to(self.device))
         
-        self.c_t = torch.eye(self.categorical_dim)[0].repeat(self.batch_size,1,self.latent_dim).to(self.device)
+        self.c_t = torch.eye(self.categorical_dim)[0].repeat(batch_size,1,self.latent_dim).to(self.device)
 
     def forward(self, states, tau):
         steps = states.size(1)
