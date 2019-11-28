@@ -90,7 +90,7 @@ def train_step(engine, batch):
         next_state_segment = next_states[:,seg_start:seg_end]
         action_segment = actions[:,seg_start:seg_end]
 
-        mask = (cur_state_segment!=Tensor([PAD_TOKEN, PAD_TOKEN])).type(torch.FloatTensor)[:,:,0]
+        mask = (cur_state_segment!=Tensor([PAD_TOKEN, PAD_TOKEN]).to(device)).type(torch.FloatTensor)[:,:,0]
 
         empty_segment = torch.ones(cur_state_segment.size())*PAD_TOKEN
         empty_segment = empty_segment.to(device)
