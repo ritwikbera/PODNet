@@ -22,8 +22,7 @@ def launch_training_job(parent_dir, data_dir, job_name, params):
     with open(json_path, 'w') as outfile:
         json.dump(params, outfile)
     
-    cmd = "python3 train.py --use_json=True"
-    # cmd = "python3 train.py --epochs={} --lr={} --log_dir={}".format(params['epochs'], params['learning_rate'], params['log_dir'])
+    cmd = f"python3 train.py --use_json=True --json_addr={model_dir}/params.json"
     
     print(cmd)
     check_call(cmd, shell=True)

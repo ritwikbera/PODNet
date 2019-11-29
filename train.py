@@ -29,12 +29,19 @@ parser.add_argument('--log_dir', type=str, default='mylogs')
 parser.add_argument('--use_cuda', type=bool, default=False)
 parser.add_argument('--launch_tb', type=bool, default=False)
 parser.add_argument('--use_json', type=bool, default=False)
+parser.add_argument('--json_addr', type=str, default=None)
 
 args = parser.parse_args()
 
 if args.use_json:
     args = vars(args)
-    json_data = json.load(open('sample_params.json', 'r'))
+
+    # if json address is not specified, use default
+    if args['json_addr'] is None:
+        json_data = json.load(open('sample_params.json', 'r'))
+    else:
+        json_data = json.load(open(args['json_addr'], 'r'))
+
     for key in json_data:
         args[key] = json_data[key]
     print('Params {}'.format(args))
