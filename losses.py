@@ -21,6 +21,7 @@ def KLDLoss(qy, mask, categorical_dim, device):
     KLD = (torch.sum(qy * log_ratio, dim=-1)*mask).sum(-2).mean()
     return KLD 
 
-def TSLoss(c_t, mask):     
+def TSLoss(c_t, mask, device):  
+    mask = mask.to(device)   
     L_TS = -((c_t[:,1:,:]*c_t[:,:-1,:]).sum(-1)*mask[:,1:]).sum(-2).mean()
     return L_TS

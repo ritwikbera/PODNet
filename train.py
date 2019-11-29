@@ -118,7 +118,7 @@ def train_step(engine, batch):
         L_ODC += DynamicsLoss(next_state_segment, next_state_pred, PAD_TOKEN, device)
         L_BC += BCLoss(action_segment, action_pred, PAD_TOKEN, device, use_discrete)
         L_KL += args.beta*KLDLoss(c_t, mask, conf.categorical_dim, device)
-        L_TS += args.alpha*TSLoss(c_t, mask)
+        L_TS += args.alpha*TSLoss(c_t, mask, device)
     
     loss = L_ODC + L_BC + L_TS + L_KL
     loss.backward()

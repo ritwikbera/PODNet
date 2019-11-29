@@ -1,9 +1,9 @@
 {
-    "encoder_type": "attentive",
+    "encoder_type": "recurrent",
     "dataset" : "robotarium",
     "lr": 5e-3,
-    "epochs": 50,
+    "epochs": 200,
     "log_dir" : "mylogs",
-    "alpha" : 0.1,
+    "alpha" : 0.0,
     "beta" : 0.5
 }
