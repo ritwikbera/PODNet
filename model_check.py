@@ -11,7 +11,7 @@ from argparse import ArgumentParser
 parser = ArgumentParser()
 parser.add_argument('--dataset', type=str, default='robotarium')
 parser.add_argument('--encoder_type', type=str, default='attentive')
-parser.add_argument('--filename', type=str, default='checkpoint_model_23')
+parser.add_argument('--filename', type=str, default='checkpoint_model_23.pth')
 args = parser.parse_args()
 
 PAD_TOKEN = -99.0
@@ -21,7 +21,7 @@ conf = config(args.dataset)
 my_dataset = RoboDataset(
     PAD_TOKEN=PAD_TOKEN, 
     MAX_LENGTH=conf.MAX_LENGTH, 
-    root_dir='data/'+dataset+'/')
+    root_dir='data/'+args.dataset+'/')
 
 dataloader = DataLoader(my_dataset, batch_size=1,
                     shuffle=True, num_workers=1)
@@ -91,7 +91,7 @@ def plot_podnet(batch, index_within_batch):
     plt.legend()
     plt.tight_layout()
     plt.savefig('plots/dynamics.png', dpi=300)
-    plt.show()
+    #plt.show()
 
     plt.figure()
     time = np.arange(0,stop_index,100)
@@ -102,7 +102,7 @@ def plot_podnet(batch, index_within_batch):
     plt.legend()
     plt.tight_layout()
     plt.savefig('plots/options.png', dpi=300)
-    plt.show()
+    #plt.show()
 
 plot_podnet(0,0)
 

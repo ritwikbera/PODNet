@@ -1,7 +1,9 @@
 {
-    "model_version": "recurrent",
-    "learning_rate": 1e-3,
-    "batch_size": 1,
-    "epochs": 10,
-    "log_dir" : "mylogs"
+    "encoder_type": "attentive",
+    "dataset" : "robotarium",
+    "lr": 5e-3,
+    "epochs": 50,
+    "log_dir" : "mylogs",
+    "alpha" : 0.1,
+    "beta" : 0.5
 }

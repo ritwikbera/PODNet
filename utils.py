@@ -69,8 +69,8 @@ class RoboDataset(Dataset):
 
 if __name__ == '__main__':
     from torch.utils.data import DataLoader 
-    my_dataset = RoboDataset(PAD_TOKEN=-99, MAX_LENGTH=20, root_dir='data/minigrid/')
-    dataloader = DataLoader(my_dataset, batch_size=4,
+    my_dataset = RoboDataset(PAD_TOKEN=-99, MAX_LENGTH=10240, root_dir='data/robotarium/')
+    dataloader = DataLoader(my_dataset, batch_size=6,
                     shuffle=True, num_workers=1)
     batch = next(iter(dataloader))
 

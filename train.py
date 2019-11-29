@@ -1,7 +1,9 @@
 from argparse import ArgumentParser
+from types import SimpleNamespace
 import os
 import shutil
 import numpy as np 
+import json
 import torch
 from torch import Tensor, nn, optim 
 import torch.nn.functional as F
@@ -20,12 +22,23 @@ parser.add_argument('--epochs', type=int, default=100)
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--dataset', type=str, default='robotarium', help='Enter minigrid, robotarium or circleworld')
 parser.add_argument('--encoder_type', type=str, default='recurrent', help='Enter recurrent, attentive, or MLP')
+parser.add_argument('--beta', type=float, default=0.5)
+parser.add_argument('--alpha', type=float, default=0.1)
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--log_dir', type=str, default='mylogs')
 parser.add_argument('--use_cuda', type=bool, default=False)
 parser.add_argument('--launch_tb', type=bool, default=False)
+parser.add_argument('--use_json', type=bool, default=False)
 
 args = parser.parse_args()
+
+if args.use_json:
+    args = vars(args)
+    json_data = json.load(open('sample_params.json', 'r'))
+    for key in json_data:
+        args[key] = json_data[key]
+    print('Params {}'.format(args))
+    args = SimpleNamespace(**args)
 
 torch.manual_seed(100)
 #clean start
@@ -104,8 +117,8 @@ def train_step(engine, batch):
         
         L_ODC += DynamicsLoss(next_state_segment, next_state_pred, PAD_TOKEN, device)
         L_BC += BCLoss(action_segment, action_pred, PAD_TOKEN, device, use_discrete)
-        L_KL += 0.5*KLDLoss(c_t, mask, conf.categorical_dim, device)
-        #L_TS += 0.0*TSLoss(c_t, mask)
+        L_KL += args.beta*KLDLoss(c_t, mask, conf.categorical_dim, device)
+        L_TS += args.alpha*TSLoss(c_t, mask)
     
     loss = L_ODC + L_BC + L_TS + L_KL
     loss.backward()
