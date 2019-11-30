@@ -10,8 +10,9 @@ from argparse import ArgumentParser
 
 parser = ArgumentParser()
 parser.add_argument('--dataset', type=str, default='robotarium')
-parser.add_argument('--encoder_type', type=str, default='attentive')
-parser.add_argument('--filename', type=str, default='checkpoint_model_23.pth')
+parser.add_argument('--encoder_type', type=str, default='recurrent')
+parser.add_argument('--log_dir', type=str, default='mylogs')
+parser.add_argument('--filename', type=str, default='checkpoint_model_20.pth')
 parser.add_argument('--max_steps', type=int, default=None)
 args = parser.parse_args()
 
@@ -27,8 +28,8 @@ my_dataset = RoboDataset(
 dataloader = DataLoader(my_dataset, batch_size=1,
                     shuffle=True, num_workers=1)
 
-filename = 'mylogs/checkpoints/'+args.filename
-
+filename = args.log_dir+'/checkpoints/'+args.filename
+torch.manual_seed(100)
 
 def load_model(filename, conf, enc_type):
     model = PODNet(
@@ -84,10 +85,10 @@ def plot_podnet(batch, index_within_batch, max_steps):
         stop_index = max_steps
 
     # plot parameters
-    plot_interval=1
+    plot_interval=10
 
     # plot
-    os.makedirs('plots', exist_ok=True)
+    os.makedirs(args.log_dir+'/plots', exist_ok=True)
     plt.figure()
     plt.plot(true_next_states[:stop_index,0], 'b-', label='Truth')
     plt.plot(true_next_states[:stop_index,1], 'r-')
@@ -98,19 +99,21 @@ def plot_podnet(batch, index_within_batch, max_steps):
     plt.legend()
     plt.grid()
     plt.tight_layout()
-    plt.savefig('plots/dynamics.png', dpi=600)
+    plt.savefig(args.log_dir+'/plots/dynamics.png', dpi=600)
     #plt.show()
 
     plt.figure()
     time = np.arange(0,stop_index,plot_interval)
     c_t = c_t[0:stop_index:plot_interval]
-    plt.plot(time, np.argmax(c_t, axis=-1), '.k', label='Predicted')
+    options = np.argmax(c_t, axis=-1)
+    plt.plot(time, options, '.k', label='Predicted')
+    print(options)
     plt.xlabel('Time Steps')
     plt.ylabel('Option')
     plt.legend()
     plt.grid()
     plt.tight_layout()
-    plt.savefig('plots/options.png', dpi=600)
+    plt.savefig(args.log_dir+'/plots/options.png', dpi=600)
     #plt.show()
 
 plot_podnet(0,0, args.max_steps)

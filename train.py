@@ -19,7 +19,7 @@ from ignite.contrib.handlers.param_scheduler import LinearCyclicalScheduler
 
 parser = ArgumentParser()
 parser.add_argument('--epochs', type=int, default=100)
-parser.add_argument('--lr', type=float, default=1e-3)
+parser.add_argument('--lr', type=float, default=5e-3)
 parser.add_argument('--dataset', type=str, default='robotarium', help='Enter minigrid, robotarium or circleworld')
 parser.add_argument('--encoder_type', type=str, default='recurrent', help='Enter recurrent, attentive, or MLP')
 parser.add_argument('--beta', type=float, default=0.5)
@@ -85,7 +85,7 @@ MAX_LENGTH = conf.MAX_LENGTH
 SEGMENT_SIZE = conf.SEGMENT_SIZE
 
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
-writer = create_summary_writer(model, dataloader, args.log_dir+'/tensorboard')
+writer = create_summary_writer(model, dataloader, args.log_dir)
 
 model.to(device)
 model.train()
@@ -153,7 +153,7 @@ def print_loss(engine):
 def tb_log(engine):
     writer.add_scalar("Dynamics Loss", engine.state.output[0].item(), engine.state.iteration)
     writer.add_scalar("Behavior Cloning Loss", engine.state.output[1].item(), engine.state.iteration)
-    #writer.add_scalar("Temporal Smoothing Loss", engine.state.output[2].item(), engine.state.iteration)
+    writer.add_scalar("Temporal Smoothing Loss", engine.state.output[2].item(), engine.state.iteration)
     writer.add_scalar("KL Divergence Penalty", engine.state.output[3].item(), engine.state.iteration)
     writer.add_scalar("Total Loss", engine.state.output[-1].item(), engine.state.iteration)
 
