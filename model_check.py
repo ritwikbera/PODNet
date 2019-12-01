@@ -51,21 +51,15 @@ podnet = load_model(filename, conf, enc_type=args.encoder_type)
 #plot first trajectory in the acquired batch
 def plot_podnet(batch, index_within_batch, max_steps):
     batch, i = batch, index_within_batch
-
     iterator = iter(dataloader)
 
     for _ in range(batch+1):
         states, true_next_states, actions = next(iterator)
 
-    print(states.size())
-
     podnet.reset(states.size(0))
-
     action_pred, next_state_pred, c_t = podnet(states, tau=0.1)
 
-
     padded_state = np.repeat([PAD_TOKEN], states.size(-1))
-
 
     states = states[i].detach().numpy()
     true_next_states = true_next_states[i].detach().numpy()
@@ -85,7 +79,7 @@ def plot_podnet(batch, index_within_batch, max_steps):
         stop_index = max_steps
 
     # plot parameters
-    plot_interval=1
+    plot_interval=10
 
     # plot
     os.makedirs(args.log_dir+'/plots', exist_ok=True)
@@ -120,7 +114,7 @@ def plot_podnet(batch, index_within_batch, max_steps):
     plt.savefig(args.log_dir+'/plots/options.png', dpi=600)
     #plt.show()
 
-plot_podnet(4,1, args.max_steps)
+plot_podnet(0,0, args.max_steps)
 
 
 # def hook_fn(m, i, o):

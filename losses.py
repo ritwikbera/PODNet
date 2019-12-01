@@ -22,6 +22,12 @@ def KLDLoss(qy, mask, categorical_dim, device):
     return KLD 
 
 def TSLoss(c_t, mask, device):  
-    mask = mask.to(device)   
-    L_TS = -((c_t[:,1:,:]*c_t[:,:-1,:]).sum(-1)*mask[:,1:]).sum(-2).mean()
+    mask = mask.to(device)
+    ind = torch.argmax(c_t, dim=-1, keepdim=True)
+    o_t = torch.FloatTensor(c_t.shape).zero_()
+    o_t = o_t.scatter_(-1, ind, 1)
+    L_TS = (1-((o_t[:,1:,:]*o_t[:,:-1,:]).sum(-1))*mask[:,1:]).sum(-2).mean()
     return L_TS
+
+if __name__ == '__main__':
+    print(TSLoss(torch.rand(2,40,3), torch.ones(2,40), device='cpu'))
