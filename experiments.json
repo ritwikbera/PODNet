@@ -1,32 +1,32 @@
 {
 	"experiment1": 
 	{
-	    "model_version": "recurrent",
+	    "encoder_type": "recurrent",
 	    "learning_rate": 5e-3,
 	    "batch_size": 1,
-	    "epochs": 2,
+	    "epochs": 100,
 	    "log_dir" : "mylogs",
 		"alpha" : 0.01,
 		"beta" : 0.5
 	},
 	"experiment2": 
 	{
-	    "model_version": "recurrent",
+	    "encoder_type": "recurrent",
 	    "learning_rate": 5e-3,
 	    "batch_size": 1,
-	    "epochs": 2,
+	    "epochs": 100,
 	    "log_dir" : "mylogs",
 		"alpha" : 0.001,
 		"beta" : 0.5
 	},
 	"experiment3": 
 	{
-	    "model_version": "recurrent",
+	    "encoder_type": "attentive",
 	    "learning_rate": 5e-3,
 	    "batch_size": 1,
-	    "epochs": 2,
+	    "epochs": 20,
 	    "log_dir" : "mylogs",
-		"alpha" : 0.0001,
+		"alpha" : 0.1,
 		"beta" : 0.5
 	}
 }

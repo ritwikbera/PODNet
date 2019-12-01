@@ -25,8 +25,8 @@ my_dataset = RoboDataset(
     MAX_LENGTH=conf.MAX_LENGTH, 
     root_dir='data/'+args.dataset+'/')
 
-dataloader = DataLoader(my_dataset, batch_size=1,
-                    shuffle=True, num_workers=1)
+dataloader = DataLoader(my_dataset, batch_size=conf.batch_size,
+                    shuffle=False, num_workers=1)
 
 filename = args.log_dir+'/checkpoints/'+args.filename
 torch.manual_seed(100)
@@ -85,7 +85,7 @@ def plot_podnet(batch, index_within_batch, max_steps):
         stop_index = max_steps
 
     # plot parameters
-    plot_interval=10
+    plot_interval=1
 
     # plot
     os.makedirs(args.log_dir+'/plots', exist_ok=True)
@@ -103,6 +103,10 @@ def plot_podnet(batch, index_within_batch, max_steps):
     #plt.show()
 
     plt.figure()
+    plt.plot(true_next_states[:stop_index,0], true_next_states[:stop_index,1])
+    plt.savefig(args.log_dir+'/plots/actual_trajectory.png', dpi=600)
+
+    plt.figure()
     time = np.arange(0,stop_index,plot_interval)
     c_t = c_t[0:stop_index:plot_interval]
     options = np.argmax(c_t, axis=-1)
@@ -116,7 +120,7 @@ def plot_podnet(batch, index_within_batch, max_steps):
     plt.savefig(args.log_dir+'/plots/options.png', dpi=600)
     #plt.show()
 
-plot_podnet(0,0, args.max_steps)
+plot_podnet(4,1, args.max_steps)
 
 
 # def hook_fn(m, i, o):

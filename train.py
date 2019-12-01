@@ -23,7 +23,7 @@ parser.add_argument('--lr', type=float, default=5e-3)
 parser.add_argument('--dataset', type=str, default='robotarium', help='Enter minigrid, robotarium or circleworld')
 parser.add_argument('--encoder_type', type=str, default='recurrent', help='Enter recurrent, attentive, or MLP')
 parser.add_argument('--beta', type=float, default=0.5)
-parser.add_argument('--alpha', type=float, default=0.1)
+parser.add_argument('--alpha', type=float, default=0.0)
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--log_dir', type=str, default='mylogs')
 parser.add_argument('--use_cuda', type=bool, default=False)
@@ -110,7 +110,7 @@ def train_step(engine, batch):
         next_state_segment = next_states[:,seg_start:seg_end]
         action_segment = actions[:,seg_start:seg_end]
 
-        mask = (cur_state_segment!=Tensor([PAD_TOKEN, PAD_TOKEN]).to(device)).type(torch.FloatTensor)[:,:,0]
+        mask = (cur_state_segment!=Tensor([PAD_TOKEN]).to(device)).type(torch.FloatTensor)[:,:,0]
 
         empty_segment = torch.ones(cur_state_segment.size())*PAD_TOKEN
         empty_segment = empty_segment.to(device)
