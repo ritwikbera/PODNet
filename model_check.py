@@ -12,7 +12,7 @@ parser = ArgumentParser()
 parser.add_argument('--dataset', type=str, default='robotarium')
 parser.add_argument('--encoder_type', type=str, default='recurrent')
 parser.add_argument('--log_dir', type=str, default='mylogs')
-parser.add_argument('--filename', type=str, default='checkpoint_model_20.pth')
+parser.add_argument('--filename', type=str, default='checkpoint_model_100.pth')
 parser.add_argument('--max_steps', type=int, default=None)
 args = parser.parse_args()
 
@@ -79,7 +79,7 @@ def plot_podnet(batch, index_within_batch, max_steps):
         stop_index = max_steps
 
     # plot parameters
-    plot_interval=10
+    plot_interval=1
 
     # plot
     os.makedirs(args.log_dir+'/plots', exist_ok=True)

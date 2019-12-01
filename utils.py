@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 import pandas as pd
 import glob
 import numpy as np
+from config import *
 from torch.utils.tensorboard import SummaryWriter
 
 def create_summary_writer(model, dataloader, log_dir):
@@ -49,7 +50,7 @@ class RoboDataset(Dataset):
         if self.root_dir == 'data/minigrid/':
             states = Tensor(np.array(traj.loc[:,'x_t':'a_1'])[:,:-1])
             actions = Tensor(np.array(traj.loc[:,'a_1':]))
-            action_dim = 3
+            action_dim = config('minigrid').action_dim
             actions = \
             torch.zeros(*actions.size()[:-1], action_dim).scatter_(-1, actions.type(torch.LongTensor), 1)
         

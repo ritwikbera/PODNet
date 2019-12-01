@@ -2,9 +2,17 @@ import numpy as np
 import os
 import pandas as pd
 
-input_file = 'minigrid20.csv'
+input_file = 'key_door_21epis.csv'
 output_dir = 'minigrid'
 
+def normalize(df):
+    features = ['x_t', 'y_t', 'heading_t']
+    result = df.copy()
+    for feature_name in features:
+        mean = np.mean(df[feature_name])
+        std = np.std(df[feature_name])
+        result[feature_name] = (df[feature_name]-mean)/std 
+    return result
 
 file = pd.read_csv(input_file)
 
@@ -19,6 +27,8 @@ new_header = ['episode', 't', 'x_t', 'y_t', 'heading_t', 'a_1']
 changes = dict(zip(old_header, new_header))
 
 file = file.rename(changes, axis=1)
+
+file = normalize(file)
 
 files = file.groupby('episode')
 print('Number of episodes {}'.format(files.ngroups))
