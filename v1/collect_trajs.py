@@ -40,7 +40,8 @@ def main():
 
     # Load the gym environment
     # Add wrapper to modify observation
-    env = ReducedObsWrapper(gym.make("MiniGrid-Empty-Random-6x6-v0"))
+    # env = ReducedObsWrapper(gym.make("MiniGrid-Empty-Random-6x6-v0"))
+    env = ReducedObsWrapper(gym.make("MiniGrid-DoorKey-16x16-v0"))
     env.episode_count = 0
 
     def resetEnv():
@@ -105,6 +106,7 @@ def main():
 
         # Step action
         obs, reward, done, info = env.step(action)
+        print('Obs {} | Action {} '.format(obs, action))
         
         # Write to log file
         log_file.write('{},{},{},{}\n'.format(

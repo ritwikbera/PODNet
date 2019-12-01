@@ -13,6 +13,7 @@ robots/*
 # log folders
 mylogs/
 logs/
+experiments/
 
 !/data/*
 !/data/circleworld/*

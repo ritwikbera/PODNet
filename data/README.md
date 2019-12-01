@@ -21,6 +21,8 @@ time step number of the current episode, action taken, and the rest are the obse
 
 - **minigrid20.csv**: twenty human generated trajectories collected on the MiniGrid-Empty-Random-6x6-v0 environment.
 
+- **key_door_21epis.csv**: twenty-one human generated trajectories collected on the MiniGrid-DoorKey-16x16-v0 environment.
+
 - **perimeter_intruder.csv**: one trajectory of the intruder robot on the PerimeterDef environment (episode 2).
 
 - **perimeter_defender.csv**: one trajectory of the defender robot on the PerimeterDef environment (episode 2).
