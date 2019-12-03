@@ -26,6 +26,9 @@ class ReducedObsWrapper(gym.core.ObservationWrapper):
             shape=(self.env.width, self.env.height, 3),  # number of cells
             dtype='uint8'
         )
+        self.key = None
+        self.goal = None
+        self.door = None
 
     def observation(self, obs):
         env = self.unwrapped
@@ -36,7 +39,7 @@ def main():
     # Structure: episode, time step, action, obs
     time_now = dt.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
     log_file = open('data/{}_log.csv'.format(time_now), 'w')
-    log_file.write('episode,time_step,action,x,y,heading\n')
+    log_file.write('episode,time_step,action,x,y,heading,key_x,key_y,door_x,door_y,goal_x,goal_y\n')
 
     # Load the gym environment
     # Add wrapper to modify observation
@@ -51,11 +54,26 @@ def main():
             print('[*] EPISODE {} | Mission: {}'.format(
                 env.episode_count,env.mission))
 
+        for grid in env.grid.grid:
+            if grid is not None and grid.type == "goal":
+                print("This grid is my goal")
+                print(grid.cur_pos)
+                env.goal = grid.cur_pos
+            if grid is not None and grid.type == "key":
+                print("This grid is my key")
+                print(grid.cur_pos)
+                env.key = '['+str(grid.cur_pos[0])+', '+str(grid.cur_pos[1])+']'
+            if grid is not None and grid.type == "door":
+                print("This grid is my door")
+                print(grid.cur_pos)
+                env.door = grid.cur_pos
+
         # Log initial observation
         action = 0
-        log_file.write('{},{},{},{}\n'.format(
+        log_file.write('{},{},{},{},{},{},{}\n'.format(
             env.episode_count, env.step_count, int(action),
-            str(obs.flatten().tolist())[1:-1]))
+            str(obs.flatten().tolist())[1:-1], \
+            str(env.key)[1:-1], str(env.door)[1:-1], str(env.goal)[1:-1]))
 
         return obs
 
@@ -109,9 +127,10 @@ def main():
         print('Obs {} | Action {} '.format(obs, action))
         
         # Write to log file
-        log_file.write('{},{},{},{}\n'.format(
+        log_file.write('{},{},{},{},{},{},{}\n'.format(
             env.episode_count, env.step_count, int(action),
-            str(obs.flatten().tolist())[1:-1]))
+            str(obs.flatten().tolist())[1:-1], \
+            str(env.key)[1:-1], str(env.door)[1:-1], str(env.goal)[1:-1]))
 
 
         if done:

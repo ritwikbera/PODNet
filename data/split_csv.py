@@ -1,17 +1,23 @@
 import numpy as np 
 import os
 import pandas as pd
+import math
 
-input_file = 'key_door_21epis.csv'
+input_file = 'minigrid_keydoor18.csv'
 output_dir = 'minigrid'
 
 def normalize(df):
+    features = ['x_t', 'y_t', 'heading_t', 'key_x', 'key_y', 'goal_x', 'goal_y', 'door_x', 'door_y']
     features = ['x_t', 'y_t', 'heading_t']
     result = df.copy()
+    # df['key_x'] = pd.to_numeric(df['key_x'])
+    print(df.dtypes)
     for feature_name in features:
-        mean = np.mean(df[feature_name])
+        mean = np.ceil(np.mean(df[feature_name]))
+        print(mean)
         std = np.std(df[feature_name])
-        result[feature_name] = (df[feature_name]-mean)/std 
+        std = 1
+        result[feature_name] = (df[feature_name]-mean)
     return result
 
 file = pd.read_csv(input_file)
