@@ -24,6 +24,8 @@ parser.add_argument('--dataset', type=str, default='robotarium', help='Enter min
 parser.add_argument('--encoder_type', type=str, default='recurrent', help='Enter recurrent, attentive, or MLP')
 parser.add_argument('--beta', type=float, default=0.5)
 parser.add_argument('--alpha', type=float, default=0.0)
+parser.add_argument('--lambda1', type=float, default=0.1)
+parser.add_argument('--lambda2', type=float, default=1.0)
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--log_dir', type=str, default='mylogs')
 parser.add_argument('--use_cuda', type=bool, default=False)
@@ -122,8 +124,8 @@ def train_step(engine, batch):
 
         action_pred, next_state_pred, c_t = model(cur_state_segment, tau)
         
-        L_ODC += DynamicsLoss(next_state_segment, next_state_pred, PAD_TOKEN, device)
-        L_BC += BCLoss(action_segment, action_pred, PAD_TOKEN, device, use_discrete)
+        L_ODC += args.lambda1*DynamicsLoss(next_state_segment, next_state_pred, PAD_TOKEN, device)
+        L_BC += args.lambda2*BCLoss(action_segment, action_pred, PAD_TOKEN, device, use_discrete)
         L_KL += args.beta*KLDLoss(c_t, mask, conf.categorical_dim, device)
         L_TS += args.alpha*TSLoss(c_t, mask, device)
     

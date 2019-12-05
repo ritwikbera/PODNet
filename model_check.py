@@ -9,7 +9,7 @@ import os
 from argparse import ArgumentParser
 
 parser = ArgumentParser()
-parser.add_argument('--dataset', type=str, default='robotarium')
+parser.add_argument('--dataset', type=str, default='minigrid')
 parser.add_argument('--encoder_type', type=str, default='recurrent')
 parser.add_argument('--log_dir', type=str, default='mylogs')
 parser.add_argument('--filename', type=str, default='checkpoint_model_100.pth')
@@ -96,6 +96,22 @@ def plot_podnet(batch, index_within_batch, max_steps):
     plt.savefig(args.log_dir+'/plots/dynamics.png', dpi=600)
     #plt.show()
 
+    if args.dataset == 'minigrid':
+        x = np.arange(0,6,1)
+        action_names = ['turn left', 'turn right', 'move forward', 'pick up key', 'drop the key', 'open door']
+        plt.figure()
+        fig, ax = plt.subplots(1,1)
+        plt.plot(np.argmax(actions[:stop_index], axis=-1), 'bs', alpha=1.0, label='Truth')
+        plt.plot(np.argmax(action_pred[:stop_index], axis=-1), 'ro', alpha=0.5, label='Predicted')
+        ax.set_yticks(x)
+        ax.set_yticklabels(action_names)
+        plt.xlabel('Time Steps')
+        plt.ylabel('Discrete Actions')
+        plt.legend()
+        plt.grid()
+        plt.tight_layout()
+        plt.savefig(args.log_dir+'/plots/actions.png', dpi=600)
+
     plt.figure()
     plt.plot(true_next_states[:stop_index,0], true_next_states[:stop_index,1])
     plt.savefig(args.log_dir+'/plots/actual_trajectory.png', dpi=600)
@@ -114,7 +130,7 @@ def plot_podnet(batch, index_within_batch, max_steps):
     plt.savefig(args.log_dir+'/plots/options.png', dpi=600)
     #plt.show()
 
-plot_podnet(0,0, args.max_steps)
+plot_podnet(0,2, args.max_steps)
 
 
 # def hook_fn(m, i, o):
