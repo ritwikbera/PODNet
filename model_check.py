@@ -113,15 +113,12 @@ def plot_podnet(batch, index_within_batch, max_steps):
         plt.savefig(args.log_dir+'/plots/actions.png', dpi=600)
 
     plt.figure()
-    plt.plot(true_next_states[:stop_index,0], true_next_states[:stop_index,1])
-    plt.savefig(args.log_dir+'/plots/actual_trajectory.png', dpi=600)
-
-    plt.figure()
+    options = np.argmax(c_t, axis=-1)
     time = np.arange(0,stop_index,plot_interval)
     c_t = c_t[0:stop_index:plot_interval]
-    options = np.argmax(c_t, axis=-1)
-    plt.plot(time, options, '.k', label='Predicted')
-    print(options)
+    options_ = np.argmax(c_t, axis=-1)
+    plt.plot(time, options_, '.k', label='Predicted')
+    print(options_)
     plt.xlabel('Time Steps')
     plt.ylabel('Option')
     plt.legend()
@@ -129,6 +126,21 @@ def plot_podnet(batch, index_within_batch, max_steps):
     plt.tight_layout()
     plt.savefig(args.log_dir+'/plots/options.png', dpi=600)
     #plt.show()
+
+    print(len(true_next_states[0:stop_index]))
+    print(len(c_t))
+    print(len(options_))
+
+    plt.figure()
+    if args.dataset == 'minigrid':
+        option_colors = ['r', 'g', 'b'] #one color each for goto key/door/goal
+        for i in range(stop_index):
+            plt.plot(states[i,0], states[i,1], option_colors[options[i]]+'o')
+    else:
+        plt.plot(states[:stop_index,0], states[:stop_index,1])
+    plt.grid()
+    plt.axis('equal')
+    plt.savefig(args.log_dir+'/plots/actual_trajectory.png', dpi=600)
 
 plot_podnet(0,2, args.max_steps)
 
