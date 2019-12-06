@@ -7,17 +7,21 @@ input_file = 'minigrid_keydoor18.csv'
 output_dir = 'minigrid'
 
 def normalize(df):
-    features = ['x_t', 'y_t', 'heading_t', 'key_x', 'key_y', 'goal_x', 'goal_y', 'door_x', 'door_y']
-    features = ['x_t', 'y_t', 'heading_t']
+    features = ['x_t', 'y_t', 'heading_t', 'key_x', 'key_y', 'door_x', 'door_y', 'goal_x', 'goal_y']
+    # features = ['x_t', 'y_t', 'heading_t']
     result = df.copy()
     # df['key_x'] = pd.to_numeric(df['key_x'])
+    position_feats = ['x_t', 'y_t', 'key_x', 'key_y', 'door_x', 'door_y', 'goal_x', 'goal_y']
+    pos_mean = np.ceil(df[position_feats].to_numpy().mean())
+    head_mean = np.ceil(np.mean(df['heading_t']))
+
+    print(pos_mean)
     print(df.dtypes)
-    for feature_name in features:
-        mean = np.ceil(np.mean(df[feature_name]))
-        print(mean)
-        std = np.std(df[feature_name])
-        std = 1
-        result[feature_name] = (df[feature_name]-mean)
+    print(head_mean)
+
+    std = 1
+    result[position_feats] = (df[position_feats]-pos_mean)
+    result['heading_t'] = (df['heading_t']-head_mean)
     return result
 
 file = pd.read_csv(input_file)

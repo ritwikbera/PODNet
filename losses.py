@@ -8,11 +8,31 @@ def DynamicsLoss(next_state_segment, next_state_pred, PAD_TOKEN, device):
     return L_ODC
 
 def BCLoss(action_segment, action_pred, PAD_TOKEN, device, use_discrete=False):
-    mask = (action_segment!=PAD_TOKEN).type(torch.FloatTensor).to(device)
+    #focal loss parameters, borrowed from RetinaNet
+    alpha = 1.0 
+    gamma = 4
+
+    mask = (action_segment!=PAD_TOKEN).type(torch.LongTensor).to(device)
+    
+    #clean out PAD_TOKENS before entering action_segment into BinaryCrossEntropy
+    pad_mask = (1-mask).type(torch.BoolTensor)
+    action_segment.masked_fill_(pad_mask, 0)
+
+    # print(action_segment)
+    assert ((action_segment>=0).all()  and (action_segment<=1).all()) #unit test to ensure all inputs to BCE are >0, <1
+
     if use_discrete:
-        L_BC = (F.binary_cross_entropy(action_pred,action_segment,reduction='none')*mask).sum(-1).sum(-2).mean()
+        BCE_loss = F.binary_cross_entropy(action_pred,action_segment,reduction='none')
+        pt = torch.exp(-BCE_loss)
+        # print(pt) #print confidence scores
+        
+        F_loss = (alpha*(1-pt)**gamma)*BCE_loss
+        # F_loss = BCE_loss # Uncomment this line to disable focal loss
+        
+        L_BC = (F_loss*mask).sum(-1).sum(-2).mean()
     else:   
         L_BC = (((action_segment - action_pred)**2)*mask).sum(-1).sum(-2).mean()
+    
     return L_BC
 
 def KLDLoss(qy, mask, categorical_dim, device):

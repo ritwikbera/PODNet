@@ -136,8 +136,16 @@ def plot_podnet(batch, index_within_batch, max_steps):
         option_colors = ['r', 'g', 'b'] #one color each for goto key/door/goal
         for i in range(stop_index):
             plt.plot(states[i,0], states[i,1], option_colors[options[i]]+'o')
+        plt.plot(states[i,-6], states[i,-5],'k^')
+        plt.plot(states[i,-4], states[i,-3],'k^')
+        plt.plot(states[i,-2], states[i,-1],'k^')
+        plt.text(states[i,-6], states[i,-5],'key')
+        plt.text(states[i,-4], states[i,-3],'door')
+        plt.text(states[i,-2], states[i,-1],'goal')
+
     else:
         plt.plot(states[:stop_index,0], states[:stop_index,1])
+    plt.legend()
     plt.grid()
     plt.axis('equal')
     plt.savefig(args.log_dir+'/plots/actual_trajectory.png', dpi=600)
