@@ -21,3 +21,4 @@ experiments/
 !/data/robotarium/*
 
 playground.py
+bin.py

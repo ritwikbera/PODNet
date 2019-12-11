@@ -54,8 +54,9 @@ class PODNet(nn.Module):
         next_state_pred = self.decode_next_state(s_t, c_t)
         action_pred = self.decode_action(s_t, c_t)
 
-        if self.use_discrete:
-            action_pred = F.softmax(action_pred, dim=-1)
+        # if self.use_discrete:
+        #     action_pred = F.log_softmax(action_pred, dim=-1)
+        #     action_pred = torch.exp(action_pred)
 
         return action_pred, next_state_pred, c_t
 
