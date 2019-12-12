@@ -22,12 +22,15 @@ Activate the new environment and install dependencies:
 ```pip install -r requirements.txt```
 
 # Instructions
+- Just enter ```. run``` in the PODNet directory and follow instructions. 
 
-- Run a single experiment with ```python train.py --epochs=30 --launch_tb=True --dataset='circleworld' --log_dir=<your_log_directory_name>```. Set ```launch_tb=True``` to launch tensorboard once training is completed. Run ```python3 train.py --help``` for more info.
+# Legacy Instructions (To be updated)
+
+- Run a single experiment with ```python train.py --epochs=30 --launch_tb=True --dataset='minigrid' --log_dir=<your_log_directory_name>```. Set ```launch_tb=True``` to launch tensorboard once training is completed. Run ```python3 train.py --help``` for more info.
 
 - Note that train.py will delete any pre-existing folder with the same name as your provided log_dir. Rename your log_dir after each run, accordingly.
 
-- For hyperparameter search, setup the experiment wise configurations in the **experiments.json** file. Once all experiments have been run visualise results by running ```tensorboard --logdir=experiments\experiment<index>\tensorboard ```
+- For hyperparameter search, setup the experiment wise configurations in the **experiments.json** file. Once all experiments have been run visualise results by running ```tensorboard --logdir=experiments\experiment<index> ```
 
 - Make sure that the root PODNet folder does not have any pre-existing **experiments** folder before running ```search_hparams.py```. Rename you **experiments** folder after each  run, accordingly.
 

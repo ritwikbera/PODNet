@@ -12,7 +12,7 @@ parser = ArgumentParser()
 parser.add_argument('--dataset', type=str, default='minigrid')
 parser.add_argument('--encoder_type', type=str, default='recurrent')
 parser.add_argument('--log_dir', type=str, default='mylogs')
-parser.add_argument('--filename', type=str, default='checkpoint_model_100.pth')
+parser.add_argument('--filename', type=str, default='checkpoint_model_10000.pth')
 parser.add_argument('--max_steps', type=int, default=None)
 args = parser.parse_args()
 

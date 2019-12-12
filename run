@@ -1,0 +1,76 @@
+#!/bin/sh
+
+echo 'Note: This script is meant for individual training runs and not hparam search runs'
+params=('epochs' 'lr' 'dataset' 'encoder_type' 'lambda1' 'lambda2' 'alpha' 'beta' 'use_cuda' 'launch_tb' 'log_dir')
+declare -A param_values
+declare -A param_help
+
+#instructions for individual arguments
+param_help['epochs']='Default:100. Enter an integer'
+param_help['lr']='Default:5e-3. Enter a float'
+param_help['dataset']='Default:minigrid. Enter minigrid.'
+param_help['encoder_type']='Default:recurrent. Enter recurrent, attentive or MLP.'
+param_help['lambda1']='Dynamics Loss weight. Default=0.1. Enter float'
+param_help['lambda2']='Behavior Cloning Loss weight. Default=10.0. Enter float'
+param_help['alpha']='Temporal Smoothing weight. Default=0.0. Enter float'
+param_help['beta']='KL Div penalty weight. Default=0.5. Enter float'
+param_help['use_cuda']='Default:False. Enter True or False'
+param_help['launch_tb']='Launch TensorBoard on completion. Defaut:False. Enter True or False'
+param_help['log_dir']='Default:mylogs. Enter logging directory name'
+
+echo 'Enter arguments for run.'
+for arg in ${params[@]}; do
+	echo ${arg}
+	echo ${param_help[$arg]}
+	echo 'Press Enter to use default value in train.py'
+	read arg_value
+	param_values[$arg]=$arg_value
+done
+
+echo 'Printing user specified arguments'
+arg_string=' '
+for i in ${!param_values[@]}; do
+	if [[ ! ${param_values[$i]} == '' ]]; then
+		arg_string+=' --'$i'='${param_values[$i]}
+	fi
+done 
+echo $arg_string
+
+echo 'Running PODNet training!'
+
+python3 train.py $arg_string
+
+# if [[ $launch_tb == 'True' ]]; then
+# 	tensorboard --logdir=$log_dir
+# fi
+
+
+# evaluation phase 
+eval_params=('dataset' 'encoder_type' 'log_dir')
+
+if [[ ${param_values['log_dir']} == '' ]]; then
+	param_values['log_dir']='mylogs'
+fi
+
+filename=''
+log_files=${param_values['log_dir']}/checkpoints/*
+for file in $log_files; do
+	filename=$(basename $file)
+	if [[ $filename == 'checkpoint_model_'* ]]; then
+		echo 'Model file being loaded ' $filename  
+		break
+	fi
+done
+
+eval_arg_string=' '
+for i in ${eval_params[@]}; do
+	if [[ ! ${param_values[$i]} == '' ]]; then
+		eval_arg_string+=' --'$i'='${param_values[$i]}
+	fi
+done 
+eval_arg_string+=' --filename='$filename
+echo $eval_arg_string
+
+echo 'Running PODNet plotting script!'
+
+python3 model_check.py $eval_arg_string
