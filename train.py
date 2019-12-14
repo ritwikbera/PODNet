@@ -7,7 +7,6 @@ import json
 import torch
 from torch import Tensor, nn, optim 
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
 from utils import *
 from models import *
 from config import *
@@ -20,16 +19,15 @@ from ignite.contrib.handlers.param_scheduler import LinearCyclicalScheduler
 parser = ArgumentParser()
 parser.add_argument('--epochs', type=int, default=100)
 parser.add_argument('--lr', type=float, default=5e-3)
-parser.add_argument('--dataset', type=str, default='minigrid', help='Enter minigrid, robotarium or circleworld')
-parser.add_argument('--encoder_type', type=str, default='recurrent', help='Enter recurrent, attentive, or MLP')
+parser.add_argument('--dataset', type=str, default='circleworld', help='Enter minigrid, robotarium or circleworld')
+parser.add_argument('--encoder_type', type=str, default='MLP', help='Enter recurrent, attentive, or MLP')
 parser.add_argument('--beta', type=float, default=0.5)
 parser.add_argument('--alpha', type=float, default=0.0)
-parser.add_argument('--lambda1', type=float, default=0.1)
-parser.add_argument('--lambda2', type=float, default=10.0)
+parser.add_argument('--lambda1', type=float, default=1.0)
+parser.add_argument('--lambda2', type=float, default=1.0)
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--log_dir', type=str, default='mylogs')
 parser.add_argument('--use_cuda', type=bool, default=False)
-parser.add_argument('--launch_tb', type=bool, default=False)
 parser.add_argument('--use_json', type=bool, default=False)
 parser.add_argument('--json_addr', type=str, default=None)
 
@@ -65,22 +63,23 @@ PAD_TOKEN = -99
 tau = 5.0
 tau_min = 0.1
 ANNEAL_RATE = 0.003
+latent_dim = 1
 
-my_dataset = RoboDataset(
-    PAD_TOKEN=PAD_TOKEN, 
-    MAX_LENGTH=conf.MAX_LENGTH, 
-    root_dir='data/'+args.dataset+'/')
+dataloader = data_feeder(args.dataset, args.encoder_type, PAD_TOKEN=PAD_TOKEN)
 
-dataloader = DataLoader(my_dataset, batch_size=conf.batch_size,
-                    shuffle=True, num_workers=1)
+outputs = next(iter(dataloader))
+
+state_dim = outputs[0].size(-1)
+next_state_dim = outputs[1].size(-1)
+action_dim = outputs[2].size(-1)
 
 model = PODNet(
-    state_dim=conf.state_dim,
-    action_dim=conf.action_dim,
-    latent_dim=conf.latent_dim,
+    state_dim=state_dim,
+    next_state_dim=next_state_dim,
+    action_dim=action_dim,
+    latent_dim=latent_dim,
     categorical_dim=conf.categorical_dim,
     encoder_type=args.encoder_type,
-    use_discrete=use_discrete,
     device=device)
 
 MAX_LENGTH = conf.MAX_LENGTH
@@ -164,11 +163,6 @@ def tb_log(engine):
 def update_temp(engine):
     global tau 
     tau = np.maximum(tau * np.exp(-ANNEAL_RATE*engine.state.epoch), tau_min)
-
-@trainer.on(Events.COMPLETED)
-def cleanup(engine):
-    if args.launch_tb:
-        os.system('tensorboard --logdir={}/tensorboard'.format(args.log_dir))
 
 trainer.run(dataloader, args.epochs)
 

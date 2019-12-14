@@ -22,11 +22,13 @@ class OptionEncoder_MLP(nn.Module):
 
     def forward(self, states, tau):
         steps = states.size(1)        
-        c_stored = self.c_t
+        c_stored = self.c_t.detach()
+        self.c_t = self.c_t.detach()
+        #unroll feedforward network as well
         for i in range(steps):
             state = states[:,i]
             state = state.view(state.size(0),1,state.size(-1))
-            z = torch.cat((state, self.c_t.detach()), -1)
+            z = torch.cat((state, self.c_t), -1)
             h1 = self.relu(self.fc1(z))
 
             if self.use_dropout:
@@ -117,15 +119,19 @@ class OptionEncoder_Recurrent(nn.Module):
 
     def forward(self, states, tau):
         steps = states.size(1)
+
+        #detach after full unrolling instead of after each step
+        self.hidden_cell = (self.hidden_cell[0].detach(), self.hidden_cell[1].detach())
+        self.c_t = self.c_t.detach()
         c_stored = self.c_t
+        
         for i in range(steps):
             state = states[:,i]
             state = state.view(state.size(0),1,state.size(-1))
 
-            lstm_in = torch.cat((state, self.c_t.detach()), dim=-1)
-            lstm_out, self.hidden_cell = self.lstm(lstm_in, 
-                (self.hidden_cell[0].detach(), self.hidden_cell[1].detach()))
-            
+            lstm_in = torch.cat((state, self.c_t), dim=-1)
+            lstm_out, self.hidden_cell = self.lstm(lstm_in, self.hidden_cell)
+
             q = self.linear(lstm_out)
 
             q_y = q.view(*q.size()[:-1], self.latent_dim, self.categorical_dim)

@@ -6,8 +6,8 @@ from torch.autograd import Variable
 from modules import *
 
 class PODNet(nn.Module):
-    def __init__(self, state_dim, action_dim, latent_dim, categorical_dim, 
-        encoder_type='recurrent', use_discrete=False, device='cpu'):
+    def __init__(self, state_dim, next_state_dim, action_dim, latent_dim, categorical_dim, 
+        encoder_type='recurrent', device='cpu'):
         super(PODNet, self).__init__()
 
         if encoder_type == 'recurrent':
@@ -33,7 +33,7 @@ class PODNet(nn.Module):
 
         self.decode_next_state = Decoder(
             in_dim=state_dim, 
-            out_dim=state_dim,
+            out_dim=next_state_dim,
             latent_dim=latent_dim, 
             categorical_dim=categorical_dim)
 
@@ -44,7 +44,6 @@ class PODNet(nn.Module):
             categorical_dim=categorical_dim)
 
         self.device = device
-        self.use_discrete = use_discrete
 
     def reset(self, batch_size):
         self.infer_option.init_states(batch_size)
@@ -53,11 +52,6 @@ class PODNet(nn.Module):
         c_t = self.infer_option(s_t, tau=tau)
         next_state_pred = self.decode_next_state(s_t, c_t)
         action_pred = self.decode_action(s_t, c_t)
-
-        # if self.use_discrete:
-        #     action_pred = F.log_softmax(action_pred, dim=-1)
-        #     action_pred = torch.exp(action_pred)
-
         return action_pred, next_state_pred, c_t
 
 if __name__ == '__main__':

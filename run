@@ -40,9 +40,9 @@ echo 'Running PODNet training!'
 
 python3 train.py $arg_string
 
-# if [[ $launch_tb == 'True' ]]; then
-# 	tensorboard --logdir=$log_dir
-# fi
+if [[ $launch_tb == 'True' ]]; then
+	tensorboard --logdir=$log_dir &
+fi
 
 
 # evaluation phase 

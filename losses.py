@@ -47,9 +47,11 @@ def focal_loss(outputs, targets, mask=None, alpha=1.0, gamma=4):
         
     F_loss = (alpha*(1-pt)**gamma)*BCE_loss
 
-    if mask is not None:
-        #average across batch size, sum across sequence length
-        masked_F_loss = (F_loss*mask).sum(-1).sum(-2).mean() 
+    if mask is None:
+        mask = torch.ones(*F_loss.size())
+    
+    #average across batch size, sum across sequence length
+    masked_F_loss = (F_loss*mask).sum(-1).sum(-2).mean() 
 
     return masked_F_loss
 
@@ -64,13 +66,13 @@ def BCLoss(action_segment, action_pred, PAD_TOKEN, device, use_discrete=False, u
 
     mask = (action_segment!=PAD_TOKEN).type(torch.LongTensor).to(device)
     
-    #clean out PAD_TOKENS before entering action_segment into BinaryCrossEntropy
-    pad_mask = (1-mask).type(torch.BoolTensor)
-    action_segment.masked_fill_(pad_mask, 0)
-
-    assert ((action_segment>=0).all()  and (action_segment<=1).all()) #unit test to ensure all inputs to BCE are >0, <1
-
     if use_discrete:
+
+        #clean out PAD_TOKENS before entering action_segment into BinaryCrossEntropy
+        pad_mask = (1-mask).type(torch.BoolTensor)
+        action_segment.masked_fill_(pad_mask, 0)
+        assert ((action_segment>=0).all()  and (action_segment<=1).all()) #unit test to ensure all inputs to BCE are >0, <1
+
         if use_focal:
             L_BC = focal_loss(action_pred, action_segment, mask)
         else:

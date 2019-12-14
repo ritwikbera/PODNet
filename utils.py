@@ -1,11 +1,20 @@
 import torch
 from torch import Tensor 
 from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
 import pandas as pd
 import glob
 import numpy as np
 from config import *
 from torch.utils.tensorboard import SummaryWriter
+from torch.nn.utils.rnn import pad_sequence
+
+def to_one_hot(actions):
+    actions -= torch.min(actions)
+    action_dim = int(torch.max(actions).item()+1)
+    actions = \
+    torch.zeros(*actions.size()[:-1], action_dim).scatter_(-1, actions.type(torch.LongTensor), 1)
+    return actions
 
 def create_summary_writer(model, dataloader, log_dir):
     writer = SummaryWriter(log_dir=log_dir)
@@ -21,22 +30,13 @@ def pad_trajectory(trajectory, PAD_TOKEN, MAX_LENGTH):
     padded_traj[:trajectory.size(0)] = trajectory
     return padded_traj
 
-def segment_traj(trajectory, PAD_TOKEN, MAX_LENGTH, SEGMENT_SIZE):
-    trajectory = pad_trajectory(trajectory, PAD_TOKEN, MAX_LENGTH)
-    traj_segments = torch.split(trajectory, SEGMENT_SIZE, dim=-2)
-    traj_segment_batch = torch.stack(traj_segments).view(-1, SEGMENT_SIZE, trajectory.size(-1))
-    return traj_segment_batch
-
-def load_segment_stack(trajectory, PAD_TOKEN=0, MAX_LENGTH=2048, SEGMENT_SIZE=512):
-    states = segment_traj(trajectory, PAD_TOKEN, MAX_LENGTH, SEGMENT_SIZE)
-    true_next_states = segment_traj(trajectory[1:], PAD_TOKEN, MAX_LENGTH, SEGMENT_SIZE)
-    return states, true_next_states
-
 class RoboDataset(Dataset):
-    def __init__(self, PAD_TOKEN, MAX_LENGTH, root_dir='data/'):
-        self.root_dir = root_dir
+    def __init__(self, dataset, encoder_type, PAD_TOKEN, MAX_LENGTH):
+        self.root_dir = 'data/'+dataset+'/'
         self.PAD_TOKEN = PAD_TOKEN
         self.MAX_LENGTH = MAX_LENGTH
+        self.dataset = dataset
+        self.encoder_type = encoder_type
 
     def __len__(self):
         return len(glob.glob(self.root_dir+'*.csv'))
@@ -47,32 +47,46 @@ class RoboDataset(Dataset):
         file = glob.glob(self.root_dir+'*.csv')[idx]
         traj = pd.read_csv(file)
         
-        if self.root_dir == 'data/minigrid/':
+        if self.dataset == 'minigrid':
             states = Tensor(np.array(traj.loc[:,'x_t':'a_1'])[:,:-1])
             actions = Tensor(np.array(traj.loc[:,'a_1':]))
-            action_dim = config('minigrid').action_dim
-            actions = \
-            torch.zeros(*actions.size()[:-1], action_dim).scatter_(-1, actions.type(torch.LongTensor), 1)
+            actions = to_one_hot(actions)
         
-        elif self.root_dir == 'data/circleworld/':
+        elif self.dataset == 'circleworld':
             states = Tensor(np.array(traj.loc[:,'x_t':'y_t']))
-            actions = Tensor(np.array(traj.loc[:,'a_1':]))
+            actions = Tensor(np.array(traj.loc[:,'a_x':'a_y']))
 
-        elif self.root_dir == 'data/robotarium/':
+        elif self.dataset == 'robotarium':
             states = Tensor(np.array(traj.loc[:,'x_t':'y_t']))
             actions = Tensor(np.array(traj.loc[:,'a_x':'a_y']))
         
-        states = pad_trajectory(states, self.PAD_TOKEN, self.MAX_LENGTH)
-        actions = pad_trajectory(actions, self.PAD_TOKEN, self.MAX_LENGTH)
-        next_states = pad_trajectory(states[1:], self.PAD_TOKEN, self.MAX_LENGTH)
+        prev_states = pad_trajectory(states, self.PAD_TOKEN, self.MAX_LENGTH)
+        curr_states = pad_trajectory(states[1:], self.PAD_TOKEN, self.MAX_LENGTH)
+        actions = pad_trajectory(actions[1:], self.PAD_TOKEN, self.MAX_LENGTH)
+        next_states = pad_trajectory(states[2:], self.PAD_TOKEN, self.MAX_LENGTH)
         
-        return states, next_states, actions
+        #concatenate current and previous state for MLP encoder
+        if self.encoder_type == 'MLP':
+            curr_states = torch.cat((curr_states, prev_states), dim=-1)
+
+        return curr_states, next_states, actions
+
+def data_feeder(dataset, encoder_type, PAD_TOKEN=-99):
+    conf = config(dataset)
+    my_dataset = RoboDataset(
+        dataset=dataset,
+        encoder_type=encoder_type,
+        PAD_TOKEN=PAD_TOKEN, 
+        MAX_LENGTH=conf.MAX_LENGTH)
+
+    dataloader = DataLoader(my_dataset, batch_size=conf.batch_size, \
+                        shuffle=True, num_workers=1)
+
+    return dataloader
+
 
 if __name__ == '__main__':
-    from torch.utils.data import DataLoader 
-    my_dataset = RoboDataset(PAD_TOKEN=-99, MAX_LENGTH=10240, root_dir='data/robotarium/')
-    dataloader = DataLoader(my_dataset, batch_size=6,
-                    shuffle=True, num_workers=1)
+    dataloader = data_feeder('minigrid', 'MLP')
     batch = next(iter(dataloader))
 
     print(batch[0].size())
