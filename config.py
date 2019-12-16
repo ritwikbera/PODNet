@@ -12,6 +12,12 @@ class config():
             self.SEGMENT_SIZE=100
             self.batch_size=4
 
+        elif dataset=='scalar':
+            self.categorical_dim=3
+            self.MAX_LENGTH=30
+            self.SEGMENT_SIZE=30
+            self.batch_size=4
+
         elif dataset=='robotarium':
             self.categorical_dim=4
             self.MAX_LENGTH=10240

@@ -19,7 +19,7 @@ latent_dim = 1
 
 conf = config(args.dataset)
 
-dataloader = data_feeder(args.dataset, args.encoder_type, PAD_TOKEN=PAD_TOKEN)
+dataloader = data_feeder(args.dataset, args.encoder_type, PAD_TOKEN=PAD_TOKEN, shuffle=False)
 
 torch.manual_seed(100)
 
@@ -128,5 +128,30 @@ def plot_podnet(index, max_steps):
     plt.axis('equal')
     plt.savefig(plot_dir+'/actual_trajectory.png', dpi=600)
 
-for i in range(10):
-    plot_podnet(i, args.max_steps)
+if args.dataset == 'scalar':
+    states, next_states, actions = next(iter(dataloader))
+    action_pred, next_state_pred, c_t = podnet(states, tau=0.1)
+    i = 0
+    states_ = states[i].detach().numpy() #first trajectory
+    
+    stop_index = 30
+
+    print('trajectory length: {}'.format(stop_index))
+
+    print('States :')
+    print(to_categorical(states[i,:stop_index,0:3]))
+    print('True Next States: ')
+    print(to_categorical(next_states[i,:stop_index,:]))
+    print('Predicted Next States: ')
+    print(to_categorical(next_state_pred[i,:stop_index,:]))
+
+    print('True Actions :')
+    print(to_categorical(actions[i,:stop_index,:]))
+    print('Predicted Actions: ')
+    print(to_categorical(action_pred[i,:stop_index,:]))
+
+    print('Predicted Options: ')
+    print(to_categorical(c_t[i,:stop_index,:]))
+else:
+    for i in range(10):
+        plot_podnet(i, args.max_steps)
