@@ -9,6 +9,11 @@ from config import *
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.utils.rnn import pad_sequence
 
+def shift_states(curr_states, i):
+    shifted = curr_states[0].repeat(i,1)
+    shifted = torch.cat((shifted, curr_states[:-i]), dim=0)
+    return shifted 
+
 def to_one_hot(actions):
     actions -= torch.min(actions)
     action_dim = int(torch.max(actions).item()+1)
@@ -31,12 +36,13 @@ def pad_trajectory(trajectory, PAD_TOKEN, MAX_LENGTH):
     return padded_traj
 
 class RoboDataset(Dataset):
-    def __init__(self, dataset, encoder_type, PAD_TOKEN, MAX_LENGTH):
+    def __init__(self, dataset, encoder_type, stack_count, PAD_TOKEN, MAX_LENGTH):
         self.root_dir = 'data/'+dataset+'/'
         self.PAD_TOKEN = PAD_TOKEN
         self.MAX_LENGTH = MAX_LENGTH
         self.dataset = dataset
         self.encoder_type = encoder_type
+        self.stack_count = stack_count
 
     def __len__(self):
         return len(glob.glob(self.root_dir+'*.csv'))
@@ -60,22 +66,33 @@ class RoboDataset(Dataset):
             states = Tensor(np.array(traj.loc[:,'x_t':'y_t']))
             actions = Tensor(np.array(traj.loc[:,'a_x':'a_y']))
         
-        prev_states = pad_trajectory(states, self.PAD_TOKEN, self.MAX_LENGTH)
-        curr_states = pad_trajectory(states[1:], self.PAD_TOKEN, self.MAX_LENGTH)
-        actions = pad_trajectory(actions[1:], self.PAD_TOKEN, self.MAX_LENGTH)
-        next_states = pad_trajectory(states[2:], self.PAD_TOKEN, self.MAX_LENGTH)
+        curr_states = pad_trajectory(states, self.PAD_TOKEN, self.MAX_LENGTH)
+        actions = pad_trajectory(actions, self.PAD_TOKEN, self.MAX_LENGTH)
+        next_states = pad_trajectory(states[1:], self.PAD_TOKEN, self.MAX_LENGTH)
         
-        #concatenate current and previous state for MLP encoder
+        # concatenate current and previous state for MLP encoder
         if self.encoder_type == 'MLP':
-            curr_states = torch.cat((curr_states, prev_states), dim=-1)
+
+            # stack_count includes current state
+            curr_states_ = curr_states
+            for i in range(1,self.stack_count):
+                prev_states = shift_states(curr_states_, i)
+                curr_states = torch.cat((curr_states, prev_states), dim=-1)
 
         return curr_states, next_states, actions
 
 def data_feeder(dataset, encoder_type, PAD_TOKEN=-99):
     conf = config(dataset)
+
+    if encoder_type == 'MLP':
+        stack_count = int(input('Enter number of frames to be stacked \n'))
+    else:
+        stack_count = None
+            
     my_dataset = RoboDataset(
         dataset=dataset,
         encoder_type=encoder_type,
+        stack_count=stack_count,
         PAD_TOKEN=PAD_TOKEN, 
         MAX_LENGTH=conf.MAX_LENGTH)
 
@@ -86,11 +103,11 @@ def data_feeder(dataset, encoder_type, PAD_TOKEN=-99):
 
 
 if __name__ == '__main__':
-    dataloader = data_feeder('minigrid', 'MLP')
+    dataloader = data_feeder('circleworld', 'MLP')
     batch = next(iter(dataloader))
 
     print(batch[0].size())
     print(batch[1].size())
     print(batch[2].size())
 
-    print(batch[2])
+    # print(batch[2])

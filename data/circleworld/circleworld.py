@@ -58,7 +58,7 @@ def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False, save_cs
     # action.append([0,0])
     for i in range(1, len(state_)):
         action.append(state_[i,:2]-state_[i-1,:2])
-    action = np.array(action)
+    action = np.array(action)*10
     # smooth out abrupt changes in states
     # action = np.clip(action,-.0175,.0175)
 
@@ -109,5 +109,6 @@ if __name__ == "__main__":
     # traj_length = len(traj_data)
 
     for i in range(20):
+        n_segments = np.random.randint(low=2,high=4)
         traj_data,_,_,_ = gen_circle_traj( \
-         r_init=100, n_segments=2, plot_traj=True, save_csv=True, save_csv_addr='circle_{}.csv'.format(i))
+         r_init=10, n_segments=n_segments, plot_traj=True, save_csv=True, save_csv_addr='circle_{}.csv'.format(i))

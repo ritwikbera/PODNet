@@ -4,14 +4,13 @@ from models import *
 from config import *
 from utils import *
 import matplotlib.pyplot as plt
-import os
+import os, glob, pdb
 from argparse import ArgumentParser
 
 parser = ArgumentParser()
 parser.add_argument('--dataset', type=str, default='circleworld')
 parser.add_argument('--encoder_type', type=str, default='MLP')
 parser.add_argument('--log_dir', type=str, default='mylogs')
-parser.add_argument('--filename', type=str, default='checkpoint_model_100.pth')
 parser.add_argument('--max_steps', type=int, default=None)
 args = parser.parse_args()
 
@@ -22,34 +21,17 @@ conf = config(args.dataset)
 
 dataloader = data_feeder(args.dataset, args.encoder_type, PAD_TOKEN=PAD_TOKEN)
 
-filename = args.log_dir+'/checkpoints/'+args.filename
 torch.manual_seed(100)
 
-def load_model(filename, conf, enc_type):
-    outputs = next(iter(dataloader))
+files = glob.glob(args.log_dir+'/checkpoints/*.pth')
+# print(files)
+# pdb.set_trace()
+podnet = torch.load(files[0], map_location=torch.device('cpu'))
+podnet.load_state_dict(torch.load(files[1], map_location=torch.device('cpu')))
+podnet.eval()
+print('Saved Model Loaded')
 
-    state_dim = outputs[0].size(-1)
-    next_state_dim = outputs[1].size(-1)
-    action_dim = outputs[2].size(-1)
-
-    model = PODNet(
-        state_dim=state_dim,
-        next_state_dim=next_state_dim,
-        action_dim=action_dim,
-        latent_dim=latent_dim,
-        categorical_dim=conf.categorical_dim,
-        encoder_type=args.encoder_type,
-        device='cpu')
-
-    model.load_state_dict(torch.load(filename, map_location=torch.device('cpu')))
-    model.eval()
-    print('Saved Model Loaded')
-
-    return model
-
-podnet = load_model(filename, conf, enc_type=args.encoder_type)
-
-def compare_plot(true, pred, stop_index, name='Position'):
+def compare_plot(true, pred, stop_index, plot_dir, name='Position'):
     plt.figure()
     plt.plot(true[:stop_index,0], 'b-', label='Truth')
     plt.plot(true[:stop_index,1], 'r-')
@@ -60,19 +42,21 @@ def compare_plot(true, pred, stop_index, name='Position'):
     plt.legend()
     plt.grid()
     plt.tight_layout()
-    plt.savefig(args.log_dir+'/plots/{}.png'.format(name), dpi=600)
+    plt.savefig(plot_dir+'/{}.png'.format(name), dpi=600)
 
 #plot first trajectory in the acquired batch
-def plot_podnet(batch, index_within_batch, max_steps):
-    batch, i = batch, index_within_batch
+def plot_podnet(index, max_steps):
     iterator = iter(dataloader)
+
+    batch_size = next(iter(dataloader))[0].size(0)
+    batch, i = index//batch_size, index%batch_size
 
     for _ in range(batch+1):
         states, true_next_states, actions = next(iterator)
 
-    print(states.size(), true_next_states.size(), actions.size())
+    # print(states.size(), true_next_states.size(), actions.size())
 
-    podnet.reset(states.size(0))
+    podnet.reset(batch_size)
     action_pred, next_state_pred, c_t = podnet(states, tau=0.1)
 
     padded_state = np.repeat([PAD_TOKEN], true_next_states.size(-1))
@@ -87,9 +71,9 @@ def plot_podnet(batch, index_within_batch, max_steps):
     # check if want to plot all steps or just a given number
     if max_steps is None:
         stop_index = 0
-        for index in range(len(true_next_states)):
-            if np.array_equal(true_next_states[index], padded_state):
-                stop_index = index
+        for index_ in range(len(true_next_states)):
+            if np.array_equal(true_next_states[index_], padded_state):
+                stop_index = index_
                 break
     else:
         stop_index = max_steps
@@ -99,9 +83,10 @@ def plot_podnet(batch, index_within_batch, max_steps):
     plot_interval=1
 
     # plot
-    os.makedirs(args.log_dir+'/plots', exist_ok=True)
+    plot_dir = args.log_dir+'/plots_{}/'.format(index)
+    os.makedirs(plot_dir, exist_ok=True)
 
-    compare_plot(true_next_states, next_state_pred, stop_index=stop_index, name='Position')
+    compare_plot(true_next_states, next_state_pred, stop_index=stop_index, plot_dir=plot_dir, name='Position')
 
     if args.dataset == 'minigrid':
         x = np.arange(0,6,1)
@@ -113,7 +98,7 @@ def plot_podnet(batch, index_within_batch, max_steps):
         ax.set_yticks(x)
         ax.set_yticklabels(action_names)
     else:
-        compare_plot(actions, action_pred, stop_index=stop_index, name='Actions')
+        compare_plot(actions, action_pred, stop_index=stop_index, plot_dir=plot_dir, name='Actions')
 
     options = np.argmax(c_t, axis=-1)
 
@@ -141,6 +126,7 @@ def plot_podnet(batch, index_within_batch, max_steps):
     plt.legend()
     plt.grid()
     plt.axis('equal')
-    plt.savefig(args.log_dir+'/plots/actual_trajectory.png', dpi=600)
+    plt.savefig(plot_dir+'/actual_trajectory.png', dpi=600)
 
-plot_podnet(0,0, args.max_steps)
+for i in range(10):
+    plot_podnet(i, args.max_steps)

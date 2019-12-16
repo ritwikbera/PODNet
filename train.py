@@ -11,6 +11,7 @@ from utils import *
 from models import *
 from config import *
 from losses import *
+from weight_init import *
 from ignite.engine import Engine, Events
 from ignite.metrics import RunningAverage
 from ignite.handlers import ModelCheckpoint
@@ -21,10 +22,10 @@ parser.add_argument('--epochs', type=int, default=100)
 parser.add_argument('--lr', type=float, default=5e-3)
 parser.add_argument('--dataset', type=str, default='circleworld', help='Enter minigrid, robotarium or circleworld')
 parser.add_argument('--encoder_type', type=str, default='MLP', help='Enter recurrent, attentive, or MLP')
-parser.add_argument('--beta', type=float, default=0.5)
+parser.add_argument('--beta', type=float, default=0.0)
 parser.add_argument('--alpha', type=float, default=0.0)
-parser.add_argument('--lambda1', type=float, default=1.0)
-parser.add_argument('--lambda2', type=float, default=1.0)
+parser.add_argument('--lambda1', type=float, default=0.1)
+parser.add_argument('--lambda2', type=float, default=2.0)
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--log_dir', type=str, default='mylogs')
 parser.add_argument('--use_cuda', type=bool, default=False)
@@ -81,6 +82,8 @@ model = PODNet(
     categorical_dim=conf.categorical_dim,
     encoder_type=args.encoder_type,
     device=device)
+
+model.apply(weight_init)
 
 MAX_LENGTH = conf.MAX_LENGTH
 SEGMENT_SIZE = conf.SEGMENT_SIZE
@@ -139,8 +142,8 @@ trainer = Engine(train_step)
 
 RunningAverage(output_transform=lambda x: x[-1].item()).attach(trainer, 'smooth loss')
 
-training_saver = ModelCheckpoint(args.log_dir+'/checkpoints', filename_prefix="checkpoint", save_interval=1, n_saved=1, save_as_state_dict=True, create_dir=True)
-to_save = {"model": model, "optimizer": optimizer} 
+training_saver = ModelCheckpoint(args.log_dir+'/checkpoints', filename_prefix="checkpoint", save_interval=1, n_saved=1, save_as_state_dict=False, create_dir=True)
+to_save = {"network": model, "model_state": model.state_dict(), "optimizer_state": optimizer.state_dict()} 
 
 scheduler_1 = LinearCyclicalScheduler(optimizer, "lr", start_value=1e-2, end_value=1e-1, cycle_size=60)
 
