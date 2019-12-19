@@ -79,7 +79,9 @@ class RoboDataset(Dataset):
         
         curr_states = pad_trajectory(states, self.PAD_TOKEN, self.MAX_LENGTH)
         actions = pad_trajectory(actions, self.PAD_TOKEN, self.MAX_LENGTH)
-        next_states = pad_trajectory(states[1:], self.PAD_TOKEN, self.MAX_LENGTH)
+        
+        pred_horizon = 1 #prediction horizon for dynamics
+        next_states = pad_trajectory(states[pred_horizon:], self.PAD_TOKEN, self.MAX_LENGTH)
         
         if self.dataset == 'scalar':
             next_states =  next_states[:,:-1]

@@ -2,10 +2,33 @@ import torch
 from torch import Tensor, nn
 import torch.nn.functional as F 
 from layers import *
+import pdb
+
+class Hook():
+    def __init__(self, module, backward=False):
+        self.backward = backward
+        if backward == False:
+            self.hook = module.register_forward_hook(self.hook_fn)
+        else:
+            self.hook = module.register_backward_hook(self.hook_fn)
+    
+    def hook_fn(self, module, input, output):
+        self.input = input
+        self.output = output
+
+        if not self.backward:
+            print('Input Tensor to {} is: {} \n'.format(module.__class__.__name__, self.input))
+        else:
+            print('Backpropagated gradient to {} is {} \n'.format(module.__class__.__name__, self.output))
+        
+        pdb.set_trace()
+    
+    def close(self):
+        self.hook.remove()
 
 class OptionEncoder_MLP(nn.Module):
     def __init__(self, state_dim, latent_dim, categorical_dim, 
-        use_dropout=False, mlp_hidden=32, device='cpu'):
+        use_dropout=True, mlp_hidden=32, device='cpu'):
         super(OptionEncoder_MLP, self).__init__()
         self.state_dim = state_dim
         self.latent_dim = latent_dim
@@ -14,8 +37,20 @@ class OptionEncoder_MLP(nn.Module):
         self.fc2 = nn.Linear(mlp_hidden, mlp_hidden)
         self.fc3 = nn.Linear(mlp_hidden, latent_dim*categorical_dim)
         self.use_dropout = use_dropout
+        self.dropout = nn.Dropout(p=0.3)
         self.relu = nn.ReLU()
         self.device = device
+
+        #normalize over the concatenated [s_t c_t] feature vector
+        feature_dim = state_dim + latent_dim*categorical_dim
+        self.layer_norm = nn.LayerNorm(feature_dim, elementwise_affine=True)
+
+        # add hook to visualize inputs to layer
+        # hook_ln = Hook(self.layer_norm)
+        # hook_in = Hook(self.fc1)
+
+        # check if option inference is receiving gradients
+        # hook_out = Hook(self.fc3, backward=True)
 
     def init_states(self, batch_size):
         self.c_t = torch.eye(self.categorical_dim)[0].repeat(batch_size,1,self.latent_dim).to(self.device)
@@ -29,6 +64,8 @@ class OptionEncoder_MLP(nn.Module):
             state = states[:,i]
             state = state.view(state.size(0),1,state.size(-1))
             z = torch.cat((state, self.c_t), -1)
+
+            # z = self.layer_norm(z)
             h1 = self.relu(self.fc1(z))
 
             if self.use_dropout:
@@ -81,8 +118,13 @@ class Decoder(nn.Module):
         self.use_dropout = use_dropout
         self.dropout = nn.Dropout(p=0.3)
 
+        #normalize over the concatenated [s_t c_t] feature vector
+        feature_dim = in_dim + latent_dim*categorical_dim
+        self.layer_norm = nn.LayerNorm(feature_dim, elementwise_affine=True)
+
     def forward(self, s_t, c_t):
         z = torch.cat((s_t, c_t), -1)
+        # z = self.layer_norm(z)
         h1 = self.relu(self.fc1(z))
         if self.use_dropout:
             h1 = self.dropout(h1)

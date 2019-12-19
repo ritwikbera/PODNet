@@ -23,11 +23,12 @@ dataloader = data_feeder(args.dataset, args.encoder_type, PAD_TOKEN=PAD_TOKEN, s
 
 torch.manual_seed(100)
 
-files = glob.glob(args.log_dir+'/checkpoints/*.pth')
+network = glob.glob(args.log_dir+'/checkpoints/checkpoint_network_*.pth')
+state_dict = glob.glob(args.log_dir+'/checkpoints/checkpoint_model_state_*.pth')
 # print(files)
 # pdb.set_trace()
-podnet = torch.load(files[0], map_location=torch.device('cpu'))
-podnet.load_state_dict(torch.load(files[1], map_location=torch.device('cpu')))
+podnet = torch.load(network[0], map_location=torch.device('cpu'))
+podnet.load_state_dict(torch.load(state_dict[0], map_location=torch.device('cpu')))
 podnet.eval()
 print('Saved Model Loaded')
 

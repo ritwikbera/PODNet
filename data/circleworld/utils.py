@@ -4,7 +4,7 @@ def normalize(data):
     '''Substracts mean and divide by standard deviation and returns statistics.'''
     mean = np.mean(data, axis=0)
     std = np.std(data, axis=0)
-    norm_data = (data-mean)
+    norm_data = (data-mean)/std
     return norm_data, mean, std
 
 def denormalize(norm_data, mean, std):

@@ -25,7 +25,7 @@ parser.add_argument('--encoder_type', type=str, default='MLP', help='Enter recur
 parser.add_argument('--beta', type=float, default=0.0)
 parser.add_argument('--alpha', type=float, default=0.0)
 parser.add_argument('--lambda1', type=float, default=1.0)
-parser.add_argument('--lambda2', type=float, default=10.0)
+parser.add_argument('--lambda2', type=float, default=1.0)
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--log_dir', type=str, default='mylogs')
 parser.add_argument('--use_cuda', type=bool, default=False)

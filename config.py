@@ -9,7 +9,7 @@ class config():
         elif dataset=='circleworld':
             self.categorical_dim=2
             self.MAX_LENGTH=500
-            self.SEGMENT_SIZE=100
+            self.SEGMENT_SIZE=20
             self.batch_size=4
 
         elif dataset=='scalar':

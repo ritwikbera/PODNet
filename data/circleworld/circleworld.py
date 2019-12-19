@@ -33,8 +33,10 @@ def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False, save_cs
         print(start_idx)
         print(end_idx)
 
+        interval = 4 #sampling interval
+        
         # generate states
-        for theta in np.arange(start_idx, end_idx, direction):
+        for theta in np.arange(start_idx, end_idx, interval*direction):
             x = r*np.cos(theta*np.pi/180)
             y = r*np.sin(theta*np.pi/180)
             state.append([x, y])
@@ -58,7 +60,7 @@ def gen_circle_traj(r_init, n_segments, plot_traj=False, save_csv=False, save_cs
     # action.append([0,0])
     for i in range(1, len(state_)):
         action.append(state_[i,:2]-state_[i-1,:2])
-    action = np.array(action)*10
+    action = np.array(action)
     # smooth out abrupt changes in states
     # action = np.clip(action,-.0175,.0175)
 
@@ -111,4 +113,4 @@ if __name__ == "__main__":
     for i in range(20):
         n_segments = np.random.randint(low=2,high=4)
         traj_data,_,_,_ = gen_circle_traj( \
-         r_init=10, n_segments=n_segments, plot_traj=True, save_csv=True, save_csv_addr='circle_{}.csv'.format(i))
+         r_init=1, n_segments=n_segments, plot_traj=True, save_csv=True, save_csv_addr='circle_{}.csv'.format(i))
