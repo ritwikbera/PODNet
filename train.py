@@ -7,11 +7,9 @@ import json
 import torch
 from torch import Tensor, nn, optim 
 import torch.nn.functional as F
-from utils import *
+from helpers import *
 from models import *
 from config import *
-from losses import *
-from weight_init import *
 from ignite.engine import Engine, Events
 from ignite.metrics import RunningAverage
 from ignite.handlers import ModelCheckpoint

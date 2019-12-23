@@ -3,7 +3,7 @@ import torch
 from torch import nn, optim, Tensor
 from torch.nn import functional as F
 from torch.autograd import Variable
-from modules import *
+from encoders import *
 
 class PODNet(nn.Module):
     def __init__(self, state_dim, next_state_dim, action_dim, latent_dim, categorical_dim, 
@@ -26,6 +26,13 @@ class PODNet(nn.Module):
 
         elif encoder_type == 'MLP':
             self.infer_option = OptionEncoder_MLP(
+                state_dim=state_dim,
+                latent_dim=latent_dim,
+                categorical_dim=categorical_dim,
+                device=device)
+
+        elif encoder_type == 'TCN':
+            self.infer_option = OptionEncoder_TCN(
                 state_dim=state_dim,
                 latent_dim=latent_dim,
                 categorical_dim=categorical_dim,

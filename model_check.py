@@ -2,7 +2,7 @@ import torch
 from torch import Tensor, nn
 from models import *
 from config import *
-from utils import *
+from helpers import *
 import matplotlib.pyplot as plt
 import os, glob, pdb
 from argparse import ArgumentParser

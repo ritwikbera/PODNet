@@ -82,6 +82,34 @@ class OptionEncoder_MLP(nn.Module):
 
         return c_stored[:,1:]
 
+class OptionEncoder_TCN(nn.Module):
+    def __init__(self, state_dim, latent_dim, categorical_dim, \
+        use_dropout=True, num_channels=[32,32], kernel_size=4, dropout=0.1, device='cpu'):
+        super(OptionEncoder_TCN, self).__init__()
+        if use_dropout:
+            dropout = 0.1
+        else:
+            dropout = None
+        output_size = latent_dim*categorical_dim
+        input_size = state_dim
+
+        self.tcn = TemporalConvNet(input_size, num_channels, kernel_size, dropout=dropout)
+        self.linear = nn.Linear(num_channels[-1], output_size)
+
+    def init_states(self, batch_size):
+        pass
+
+    def forward(self, states, tau):
+        # x needs to have dimension (N, C, L) in order to be passed into CNN
+        output = self.tcn(states.transpose(1, 2)).transpose(1, 2)
+        output = self.linear(output)
+
+        q_y = q.view(*q.size()[:-1], self.latent_dim, self.categorical_dim)
+        c_stored = F.gumbel_softmax(q_y, tau=tau, hard=not self.training)
+        c_stored = c_stored.view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
+        
+        return c_stored
+
 class OptionEncoder_Attentive(nn.Module):
     def __init__(self, state_dim, latent_dim, categorical_dim, NUM_HEADS=2, use_dropout=False, device='cpu'):
         super(OptionEncoder_Attentive, self).__init__()
