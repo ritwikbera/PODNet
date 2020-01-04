@@ -3,6 +3,9 @@ from torch import Tensor, nn
 import torch.nn.functional as F 
 from functools import partial
 
+EPS = 1e-17
+NEG_INF = -1e30
+
 def class_weights(targets):
     num_classes = targets.size(-1)
     targets = targets.view(-1, num_classes)
@@ -82,17 +85,39 @@ def BCLoss(action_segment, action_pred, PAD_TOKEN, device, use_discrete=False, u
             else:
                 L_BC = weighted_BCE(action_pred, action_segment, mask)
     else:   
-        L_BC = (F.mse_loss(action_pred, action_segment, reduce=False, reduction='none')*mask).sum(-1).sum(-2).mean()
+        L_BC = (F.mse_loss(action_pred, action_segment, reduction='none')*mask).sum(-1).sum(-2).mean()
     
     return L_BC
 
-def KLDLoss(qy, mask, categorical_dim, device):
-    mask = mask.to(device)
-    log_ratio = torch.log(qy * categorical_dim + 1e-20)
-    KLD = (torch.sum(qy * log_ratio, dim=-1)*mask).sum(-2).mean()
-    return KLD 
+def kl_gaussian(mu, log_var):
+    """KL divergence between Gaussian posterior and standard normal prior."""
+    return -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim = -1)
 
-def TSLoss(c_t, mask, device):  
+def kl_categorical_uniform(preds):
+    """KL divergence between categorical distribution and uniform prior."""
+    kl_div = preds * torch.log(preds + EPS)  # Constant term omitted.
+    return kl_div.sum(-1)
+
+def KLDLoss(logits, mask, args, device):
+    mask = mask.to(device)
+
+    # Evaluate KL Divergence loss, and sum over masked length, avg over batch.
+    
+    if args.latent == 'gaussian':
+        mu, log_var = torch.split(logits, args.latent_dim, dim=-1)
+        mu = torch.clamp(mu, min=-1, max=1)
+        log_var = torch.clamp(log_var, min=0.1, max=10)
+        kl_z = kl_gaussian(mu, log_var)
+    elif args.latent == 'concrete':
+        kl_z = kl_categorical_uniform(F.softmax(logits, dim=-1))
+    else:
+        raise ValueError('Invalid argument for `latent_dist`.')
+    
+    kl_z = (kl_z*mask).sum(1).mean()
+    
+    return kl_z
+
+def TSLoss(c_t, mask, args, device):  
     mask = mask.to(device)
     ind = torch.argmax(c_t, dim=-1, keepdim=True)
     o_t = torch.FloatTensor(c_t.shape).zero_()

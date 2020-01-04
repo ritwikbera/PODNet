@@ -9,6 +9,28 @@ from config import *
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.utils.rnn import pad_sequence
 
+def to_device(items, device='cpu'):
+    new_items = []
+    for item in items:
+        if isinstance(item, Tensor):
+            item = item.to(device)
+        new_items.append(item)
+    return new_items
+
+def segment_is_empty(cur_state_segment, PAD_TOKEN):
+    try:
+        device = cur_state_segment.get_device()
+    except Exception:
+        device = 'cpu'
+    if device == -1:
+        device = 'cpu'
+    
+    empty_segment = (torch.ones(cur_state_segment.size())*PAD_TOKEN).to(device)
+
+    if torch.all(torch.eq(cur_state_segment,empty_segment)):
+        return True
+    return False
+
 def to_categorical(data):
     if isinstance(data, Tensor):
         data = data.detach().numpy()
@@ -97,17 +119,17 @@ class RoboDataset(Dataset):
 
         return curr_states, next_states, actions
 
-def data_feeder(dataset, encoder_type, PAD_TOKEN=-99, shuffle=True):
-    conf = config(dataset)
+def data_feeder(args, PAD_TOKEN=-99, shuffle=True):
+    conf = config(args.dataset)
 
-    if encoder_type == 'MLP':
+    if args.encoder_type == 'MLP':
         stack_count = int(input('Enter number of frames to be stacked \n'))
     else:
         stack_count = None
             
     my_dataset = RoboDataset(
-        dataset=dataset,
-        encoder_type=encoder_type,
+        dataset=args.dataset,
+        encoder_type=args.encoder_type,
         stack_count=stack_count,
         PAD_TOKEN=PAD_TOKEN, 
         MAX_LENGTH=conf.MAX_LENGTH)

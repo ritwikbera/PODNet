@@ -3,23 +3,22 @@ from torch import Tensor, nn
 from models import *
 from config import *
 from helpers import *
+import matplotlib
 import matplotlib.pyplot as plt
-import os, glob, pdb
+import os, glob, pdb, pickle
 from argparse import ArgumentParser
 
-parser = ArgumentParser()
-parser.add_argument('--dataset', type=str, default='circleworld')
-parser.add_argument('--encoder_type', type=str, default='MLP')
-parser.add_argument('--log_dir', type=str, default='mylogs')
-parser.add_argument('--max_steps', type=int, default=None)
-args = parser.parse_args()
+matplotlib.use('TkAgg')
 
+max_steps = None
 PAD_TOKEN = -99.0
-latent_dim = 1
 
-conf = config(args.dataset)
+filename = 'mylogs/argsfile'
+infile = open(filename, 'rb')
+args = pickle.load(infile)
+infile.close()
 
-dataloader = data_feeder(args.dataset, args.encoder_type, PAD_TOKEN=PAD_TOKEN, shuffle=False)
+dataloader = data_feeder(args, PAD_TOKEN=PAD_TOKEN, shuffle=False)
 
 torch.manual_seed(100)
 
@@ -58,7 +57,7 @@ def plot_podnet(index, max_steps):
     # print(states.size(), true_next_states.size(), actions.size())
 
     podnet.reset(batch_size)
-    action_pred, next_state_pred, c_t = podnet(states, tau=0.1)
+    action_pred, next_state_pred, c_t, _ = podnet(states, tau=0.1)
 
     padded_state = np.repeat([PAD_TOKEN], true_next_states.size(-1))
 
@@ -155,4 +154,4 @@ if args.dataset == 'scalar':
     print(to_categorical(c_t[i,:stop_index,:]))
 else:
     for i in range(10):
-        plot_podnet(i, args.max_steps)
+        plot_podnet(i, max_steps)

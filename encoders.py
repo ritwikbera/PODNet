@@ -2,29 +2,8 @@ import torch
 from torch import Tensor, nn
 import torch.nn.functional as F 
 from layers import *
+from helpers import *
 import pdb
-
-class Hook():
-    def __init__(self, module, backward=False):
-        self.backward = backward
-        if backward == False:
-            self.hook = module.register_forward_hook(self.hook_fn)
-        else:
-            self.hook = module.register_backward_hook(self.hook_fn)
-    
-    def hook_fn(self, module, input, output):
-        self.input = input
-        self.output = output
-
-        if not self.backward:
-            print('Input Tensor to {} is: {} \n'.format(module.__class__.__name__, self.input))
-        else:
-            print('Backpropagated gradient to {} is {} \n'.format(module.__class__.__name__, self.output))
-        
-        pdb.set_trace()
-    
-    def close(self):
-        self.hook.remove()
 
 class OptionEncoder_MLP(nn.Module):
     def __init__(self, state_dim, latent_dim, categorical_dim, 
@@ -35,7 +14,10 @@ class OptionEncoder_MLP(nn.Module):
         self.categorical_dim = categorical_dim
         self.fc1 = nn.Linear(state_dim + latent_dim*categorical_dim, mlp_hidden)
         self.fc2 = nn.Linear(mlp_hidden, mlp_hidden)
-        self.fc3 = nn.Linear(mlp_hidden, latent_dim*categorical_dim)
+        
+        self.logits_dim = latent_dim*categorical_dim if categorical_dim!=1 else 2*latent_dim
+        self.fc3 = nn.Linear(mlp_hidden, self.logits_dim)
+        
         self.use_dropout = use_dropout
         self.dropout = nn.Dropout(p=0.3)
         self.relu = nn.ReLU()
@@ -52,6 +34,8 @@ class OptionEncoder_MLP(nn.Module):
         # check if option inference is receiving gradients
         # hook_out = Hook(self.fc3, backward=True)
 
+        self.probs = probs(self.latent_dim, self.categorical_dim)
+
     def init_states(self, batch_size):
         self.c_t = torch.eye(self.categorical_dim)[0].repeat(batch_size,1,self.latent_dim).to(self.device)
 
@@ -59,6 +43,9 @@ class OptionEncoder_MLP(nn.Module):
         steps = states.size(1)        
         c_stored = self.c_t.detach()
         self.c_t = self.c_t.detach()
+
+        logits = torch.randn(states.size(0),1,self.logits_dim).to(self.device)
+
         #unroll feedforward network as well
         for i in range(steps):
             state = states[:,i]
@@ -75,12 +62,12 @@ class OptionEncoder_MLP(nn.Module):
                 h2 = self.dropout(h2)
             q = self.fc3(h2)
 
-            q_y = q.view(*q.size()[:-1], self.latent_dim, self.categorical_dim)
-            self.c_t = F.gumbel_softmax(q_y, tau=tau, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
+            self.c_t = self.probs(q, tau)
 
             c_stored = torch.cat((c_stored, self.c_t), dim = 1)
+            logits = torch.cat((logits, q), dim = 1)
 
-        return c_stored[:,1:]
+        return c_stored[:,1:], logits[:,1:]
 
 class OptionEncoder_TCN(nn.Module):
     def __init__(self, state_dim, latent_dim, categorical_dim, \
@@ -102,17 +89,17 @@ class OptionEncoder_TCN(nn.Module):
     def forward(self, states, tau):
         # x needs to have dimension (N, C, L) in order to be passed into CNN
         output = self.tcn(states.transpose(1, 2)).transpose(1, 2)
-        output = self.linear(output)
+        q = self.linear(output)
 
         q_y = q.view(*q.size()[:-1], self.latent_dim, self.categorical_dim)
         c_stored = F.gumbel_softmax(q_y, tau=tau, hard=not self.training)
         c_stored = c_stored.view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
         
-        return c_stored
+        return c_stored, q
 
-class OptionEncoder_Attentive(nn.Module):
+class OptionEncoder_attentive(nn.Module):
     def __init__(self, state_dim, latent_dim, categorical_dim, NUM_HEADS=2, use_dropout=False, device='cpu'):
-        super(OptionEncoder_Attentive, self).__init__()
+        super(OptionEncoder_attentive, self).__init__()
         self.state_dim = state_dim
         self.latent_dim = latent_dim
         self.categorical_dim = categorical_dim
@@ -130,7 +117,7 @@ class OptionEncoder_Attentive(nn.Module):
         q_y = q.view(*q.size()[:-1], self.latent_dim, self.categorical_dim)
         c_stored = F.gumbel_softmax(q_y, tau=tau, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
 
-        return c_stored
+        return c_stored, q
 
     def init_states(self, batch_size):
         pass
@@ -161,20 +148,22 @@ class Decoder(nn.Module):
             h2 = self.dropout(h2)
         return self.fc3(h2)
 
-class OptionEncoder_Recurrent(nn.Module):
-    def __init__(self, input_size, latent_dim, categorical_dim, device='cpu', hidden_layer_size=32, num_layers=2):
+class OptionEncoder_recurrent(nn.Module):
+    def __init__(self, state_dim, latent_dim, categorical_dim, device='cpu', hidden_layer_size=32, num_layers=2):
         super().__init__()
-        self.input_size = input_size
+        self.state_dim = state_dim
         self.latent_dim =latent_dim
         self.categorical_dim = categorical_dim
         self.hidden_layer_size = hidden_layer_size
         self.num_layers = num_layers
         self.device = device
         
-        self.lstm = nn.LSTM(input_size+latent_dim*categorical_dim,
+        self.lstm = nn.LSTM(state_dim+latent_dim*categorical_dim,
          hidden_layer_size, num_layers, batch_first=True)
-        self.linear = nn.Linear(hidden_layer_size, latent_dim*categorical_dim)
         
+        self.logits_dim = latent_dim*categorical_dim if categorical_dim!=1 else 2*latent_dim
+        self.linear = nn.Linear(mlp_hidden, self.logits_dim)
+        self.probs = probs(self.latent_dim, self.categorical_dim)
         self.init_params()
 
     def init_params(self):
@@ -192,9 +181,10 @@ class OptionEncoder_Recurrent(nn.Module):
 
         #detach after full unrolling instead of after each step
         self.hidden_cell = (self.hidden_cell[0].detach(), self.hidden_cell[1].detach())
-        self.c_t = self.c_t.detach()
-        c_stored = self.c_t
+        c_stored, self.c_t = self.c_t.detach()
         
+        logits = torch.randn(states.size(0),1,self.logits_dim).to(self.device)
+
         for i in range(steps):
             state = states[:,i]
             state = state.view(state.size(0),1,state.size(-1))
@@ -203,13 +193,12 @@ class OptionEncoder_Recurrent(nn.Module):
             lstm_out, self.hidden_cell = self.lstm(lstm_in, self.hidden_cell)
 
             q = self.linear(lstm_out)
-
-            q_y = q.view(*q.size()[:-1], self.latent_dim, self.categorical_dim)
-            self.c_t = F.gumbel_softmax(q_y, tau=tau, hard=not self.training).view(*q_y.size()[:-2], self.latent_dim*self.categorical_dim)
+            self.c_t = self.probs(q, tau)
 
             c_stored = torch.cat((c_stored, self.c_t), dim = 1)
-        
-        return c_stored[:,1:]  #return inferred options for the entire new segment
+            logits = torch.cat((logits, q), dim = 1)
+
+        return c_stored[:,1:], logits[:,1:]  #return inferred options for the entire new segment
 
 if __name__ == '__main__':
     states = torch.randn(4,10,2)
